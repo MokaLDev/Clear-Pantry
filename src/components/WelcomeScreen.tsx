@@ -16,7 +16,7 @@ export default function WelcomeScreen({ onStart }: WelcomeScreenProps) {
 
       {/* Top Margin Buffer */}
       <div className="w-full z-10 flex justify-between items-center pt-2">
-        <span className="text-[10px] tracking-widest text-[#6a7a7b] font-mono">SOUS-CHEF SYSTEM v0.92</span>
+        <span className="text-[10px] tracking-widest text-[#6a7a7b] font-mono">CLEAR-PANTRY SYSTEM v0.92</span>
         <div className="flex items-center gap-1.5 bg-[#ebe7e7] px-2 py-0.5 rounded text-[10px] text-[#006970] font-mono">
           <span className="w-1.5 h-1.5 bg-[#006970] rounded-full animate-ping" />
           ACTIVE

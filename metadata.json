@@ -1,5 +1,5 @@
 {
-  "name": "Sous-Chef",
+  "name": "Clear-Pantry",
   "description": "Precision visual-AI kitchen ingredient organizer and depletion tracking environment.",
   "requestFramePermissions": ["camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

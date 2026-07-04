@@ -10,25 +10,25 @@ import { Home, Camera, LayoutGrid, Settings, AlertCircle, RefreshCw } from 'luci
 
 export default function App() {
   const [started, setStarted] = useState<boolean>(() => {
-    return localStorage.getItem('souschef_started') === 'true';
+    return localStorage.getItem('clearpantry_started') === 'true';
   });
 
   const [currentTab, setCurrentTab] = useState<string>(() => {
-    return localStorage.getItem('souschef_tab') || 'home';
+    return localStorage.getItem('clearpantry_tab') || 'home';
   });
 
   const [ingredients, setIngredients] = useState<Ingredient[]>(() => {
-    const saved = localStorage.getItem('souschef_ingredients');
+    const saved = localStorage.getItem('clearpantry_ingredients');
     return saved ? JSON.parse(saved) : INITIAL_INGREDIENTS;
   });
 
   const [refills, setRefills] = useState<RefillRecord[]>(() => {
-    const saved = localStorage.getItem('souschef_refills');
+    const saved = localStorage.getItem('clearpantry_refills');
     return saved ? JSON.parse(saved) : INITIAL_REFILLS;
   });
 
   const [config, setConfig] = useState<UserConfig>(() => {
-    const saved = localStorage.getItem('souschef_config');
+    const saved = localStorage.getItem('clearpantry_config');
     if (saved) {
       return JSON.parse(saved);
     }
@@ -43,23 +43,23 @@ export default function App() {
 
   // Synchronize localStorage
   useEffect(() => {
-    localStorage.setItem('souschef_started', String(started));
+    localStorage.setItem('clearpantry_started', String(started));
   }, [started]);
 
   useEffect(() => {
-    localStorage.setItem('souschef_tab', currentTab);
+    localStorage.setItem('clearpantry_tab', currentTab);
   }, [currentTab]);
 
   useEffect(() => {
-    localStorage.setItem('souschef_ingredients', JSON.stringify(ingredients));
+    localStorage.setItem('clearpantry_ingredients', JSON.stringify(ingredients));
   }, [ingredients]);
 
   useEffect(() => {
-    localStorage.setItem('souschef_refills', JSON.stringify(refills));
+    localStorage.setItem('clearpantry_refills', JSON.stringify(refills));
   }, [refills]);
 
   useEffect(() => {
-    localStorage.setItem('souschef_config', JSON.stringify(config));
+    localStorage.setItem('clearpantry_config', JSON.stringify(config));
     
     // Dynamically adjust dietary advice based on Report Generation Logic!
     const query = config.reportGenerationLogic.toLowerCase();
@@ -161,9 +161,9 @@ export default function App() {
       language: 'English (US)',
       reportGenerationLogic: 'Prioritize high-protein ingredients and list expiration dates in DD/MM/YYYY format...'
     });
-    localStorage.removeItem('souschef_ingredients');
-    localStorage.removeItem('souschef_refills');
-    localStorage.removeItem('souschef_config');
+    localStorage.removeItem('clearpantry_ingredients');
+    localStorage.removeItem('clearpantry_refills');
+    localStorage.removeItem('clearpantry_config');
   };
 
   const handleRefreshAdvice = () => {
