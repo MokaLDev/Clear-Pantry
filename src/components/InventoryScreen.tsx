@@ -1,19 +1,57 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Ingredient, RefillRecord } from '../types';
-import { ArrowUpRight, ShieldAlert, Cpu, Check, HelpCircle, ChevronRight } from 'lucide-react';
+import { ArrowUpRight, ShieldAlert, Cpu, Check, HelpCircle, ChevronRight, X, ChevronDown, Trash2 } from 'lucide-react';
 
 interface InventoryScreenProps {
   ingredients: Ingredient[];
   refills: RefillRecord[];
   onManualRefill: (name: string, qty: string) => void;
+  onDeleteRefill: (id: string) => void;
   darkMode: boolean;
 }
 
-export default function InventoryScreen({ ingredients, refills, onManualRefill, darkMode }: InventoryScreenProps) {
+export default function InventoryScreen({ ingredients, refills, onManualRefill, onDeleteRefill, darkMode }: InventoryScreenProps) {
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
   const [manualIngredient, setManualIngredient] = useState('');
-  const [manualQty, setManualQty] = useState('');
+  const [manualAmount, setManualAmount] = useState('');
+  const [manualUnit, setManualUnit] = useState('g');
   const [showManualForm, setShowManualForm] = useState(false);
+  const [swipeOffsets, setSwipeOffsets] = useState<Record<string, number>>({});
+  const swipeRef = React.useRef<{ id: string; startX: number; startOffset: number } | null>(null);
+  const DELETE_WIDTH = 64;
+  const DELETE_EXTRA = 56;
+  const DELETE_TRIGGER = -(DELETE_WIDTH + DELETE_EXTRA); // -120
+  const MAX_DRAG = DELETE_WIDTH + DELETE_EXTRA * 2; // 176
+
+  const UNITS = ['g', 'kg', 'ml', 'l', 'oz', 'lb', 'pcs', '%'];
+
+  useEffect(() => {
+    if (!showManualForm) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeManualForm();
+        return;
+      }
+      if (e.key === 'Enter') {
+        if (manualIngredient && manualAmount && Number(manualAmount) > 0) {
+          handleAddManualRefill();
+        }
+        return;
+      }
+      // Let the ingredient input receive normal keystrokes
+      if (document.activeElement instanceof HTMLInputElement) return;
+
+      if (/^[0-9]$/.test(e.key)) {
+        handleNumpad(e.key);
+      } else if (e.key === '.' || e.key === ',') {
+        handleNumpad('.');
+      } else if (e.key === 'Backspace' || e.key === 'Delete') {
+        handleNumpad('DEL');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showManualForm, manualIngredient, manualAmount, manualUnit]);
 
   // Spoilage risk items (High risk or critical status)
   const spoilageItems = ingredients.filter(i => i.spoilageRisk === 'High');
@@ -23,13 +61,77 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
   const secondaryPoints = [78, 70, 72, 68, 80, 85, 90]; // secondary dotted line
   const days = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
-  const handleAddManualRefill = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!manualIngredient || !manualQty) return;
-    onManualRefill(manualIngredient, manualQty);
+  const closeManualForm = () => {
     setManualIngredient('');
-    setManualQty('');
+    setManualAmount('');
+    setManualUnit('g');
     setShowManualForm(false);
+  };
+
+  const handleAddManualRefill = () => {
+    if (!manualIngredient || !manualAmount) return;
+    const qty = `+${manualAmount}${manualUnit}`;
+    onManualRefill(manualIngredient, qty);
+    closeManualForm();
+  };
+
+  const handleNumpad = (key: string) => {
+    if (key === 'DEL') {
+      setManualAmount(prev => prev.slice(0, -1));
+    } else if (key === '.') {
+      setManualAmount(prev => {
+        if (prev.includes('.')) return prev;
+        return prev === '' ? '0.' : prev + '.';
+      });
+    } else {
+      setManualAmount(prev => (prev.length < 6 ? prev + key : prev));
+    }
+  };
+
+  // Swipe-to-delete helpers
+  const handlePointerStart = (id: string, clientX: number) => {
+    swipeRef.current = { id, startX: clientX, startOffset: swipeOffsets[id] || 0 };
+    setSwipeOffsets(prev => {
+      const next: Record<string, number> = {};
+      Object.keys(prev).forEach(k => { if (k !== id) next[k] = 0; });
+      next[id] = prev[id] || 0;
+      return next;
+    });
+  };
+
+  const handlePointerMove = (id: string, clientX: number) => {
+    if (!swipeRef.current || swipeRef.current.id !== id) return;
+    const delta = clientX - swipeRef.current.startX;
+    const raw = swipeRef.current.startOffset + delta;
+    const clamped = Math.max(-MAX_DRAG, Math.min(0, raw));
+    setSwipeOffsets(prev => ({ ...prev, [id]: clamped }));
+  };
+
+  const handlePointerEnd = (id: string, clientX: number) => {
+    if (!swipeRef.current || swipeRef.current.id !== id) return;
+    const delta = clientX - swipeRef.current.startX;
+    const startOffset = swipeRef.current.startOffset;
+    const current = swipeOffsets[id] || 0;
+    let snapped = current;
+
+    if (current <= DELETE_TRIGGER) {
+      // Second-stage pull: delete the entry
+      onDeleteRefill(id);
+      setSwipeOffsets(prev => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    } else if (Math.abs(delta) < 5 && startOffset !== 0) {
+      // Tap-to-close when already open
+      snapped = 0;
+      setSwipeOffsets(prev => ({ ...prev, [id]: snapped }));
+    } else {
+      // Snap open or closed
+      snapped = current < -DELETE_WIDTH / 2 ? -DELETE_WIDTH : 0;
+      setSwipeOffsets(prev => ({ ...prev, [id]: snapped }));
+    }
+    swipeRef.current = null;
   };
 
   return (
@@ -196,7 +298,7 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
             <div className="flex items-center gap-2">
               <span className={`text-[9px] font-mono tracking-wider uppercase ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>SYNCED 2M AGO</span>
               <button 
-                onClick={() => setShowManualForm(!showManualForm)}
+                onClick={() => showManualForm ? closeManualForm() : setShowManualForm(true)}
                 className={`text-[10px] font-mono px-2 py-1 rounded transition-colors ${
                   darkMode ? 'bg-[#00f0ff] text-black hover:bg-[#00dbe9]' : 'bg-[#006970] text-white hover:bg-[#005a61]'
                 }`}
@@ -206,48 +308,111 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
             </div>
           </div>
 
-          {/* Quick Manual Log Form */}
-          {showManualForm && (
-            <form onSubmit={handleAddManualRefill} className={`mb-5 p-3 border rounded space-y-3 ${
-              darkMode ? 'bg-neutral-950 border-neutral-800' : 'bg-[#fcf9f8] border-[#e5e2e1]'
-            }`}>
-              <h4 className="text-xs font-bold">Manual Stock Restock Log</h4>
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  type="text"
-                  placeholder="Ingredient (e.g. Flour)"
-                  value={manualIngredient}
-                  onChange={(e) => setManualIngredient(e.target.value)}
-                  className={`border text-xs p-2 rounded focus:outline-none transition-colors ${
-                    darkMode 
-                      ? 'bg-neutral-900 border-neutral-750 focus:border-[#00f0ff] text-white' 
-                      : 'bg-white border-[#e5e2e1] focus:border-[#006970] text-[#1c1b1b]'
-                  }`}
-                  required
-                />
-                <input
-                  type="text"
-                  placeholder="Quantity (e.g. +500g)"
-                  value={manualQty}
-                  onChange={(e) => setManualQty(e.target.value)}
-                  className={`border text-xs p-2 rounded focus:outline-none transition-colors ${
-                    darkMode 
-                      ? 'bg-neutral-900 border-neutral-750 focus:border-[#00f0ff] text-white' 
-                      : 'bg-white border-[#e5e2e1] focus:border-[#006970] text-[#1c1b1b]'
-                  }`}
-                  required
-                />
+          {/* Manual Log Panel - grows out of the chart area */}
+          <div className={`grid transition-[grid-template-rows] duration-300 ease-out mb-5 ${
+            showManualForm ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+          }`}>
+            <div className="overflow-hidden">
+              <div className={`border rounded-lg overflow-hidden transition-colors ${
+                darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-[#e5e2e1]'
+              }`}>
+                <div className={`flex items-center justify-between px-4 py-2.5 border-b ${
+                  darkMode ? 'border-neutral-800' : 'border-[#e5e2e1]'
+                }`}>
+                  <span className="text-[10px] font-mono tracking-widest uppercase font-bold">
+                    Manual Stock Restock Log
+                  </span>
+                  <button
+                    onClick={closeManualForm}
+                    className={`p-1 rounded transition-colors ${
+                      darkMode ? 'hover:bg-neutral-800 text-neutral-400' : 'hover:bg-[#f0edec] text-[#6a7a7b]'
+                    }`}
+                    aria-label="Close"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+
+                <div className="p-4 space-y-3">
+                  {/* Ingredient input */}
+                  <input
+                    type="text"
+                    placeholder="Ingredient (e.g. Flour)"
+                    value={manualIngredient}
+                    onChange={(e) => setManualIngredient(e.target.value)}
+                    className={`w-full border text-xs p-2.5 rounded focus:outline-none transition-colors ${
+                      darkMode
+                        ? 'bg-neutral-950 border-neutral-800 focus:border-[#00f0ff] text-white'
+                        : 'bg-[#fcf9f8] border-[#e5e2e1] focus:border-[#006970] text-[#1c1b1b]'
+                    }`}
+                  />
+
+                  {/* Quantity readout + unit dropdown */}
+                  <div className="flex items-center gap-2">
+                    <div className={`flex-1 border rounded p-2 text-center font-mono text-base tracking-wider transition-colors ${
+                      darkMode
+                        ? 'bg-neutral-950 border-neutral-800 text-[#00f0ff]'
+                        : 'bg-[#fcf9f8] border-[#e5e2e1] text-[#006970]'
+                    }`}>
+                      +{manualAmount || '0'}{manualUnit}
+                    </div>
+                    <div className="relative">
+                      <select
+                        value={manualUnit}
+                        onChange={(e) => setManualUnit(e.target.value)}
+                        className={`appearance-none border text-[10px] font-mono font-bold uppercase tracking-wider pl-2.5 pr-7 py-2.5 rounded focus:outline-none transition-colors ${
+                          darkMode
+                            ? 'bg-neutral-950 border-neutral-800 text-white focus:border-[#00f0ff]'
+                            : 'bg-[#fcf9f8] border-[#e5e2e1] text-[#1c1b1b] focus:border-[#006970]'
+                        }`}
+                      >
+                        {UNITS.map(unit => (
+                          <option key={unit} value={unit}>{unit}</option>
+                        ))}
+                      </select>
+                      <ChevronDown
+                        size={12}
+                        className={`absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none ${
+                          darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'
+                        }`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Sleek number pad - thin separators like macOS Calculator */}
+                  <div className={`grid grid-cols-3 border rounded-lg overflow-hidden ${
+                    darkMode ? 'border-neutral-800 divide-neutral-800' : 'border-[#e5e2e1] divide-[#e5e2e1]'
+                  } divide-x divide-y`}>
+                    {['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'DEL'].map((key) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => handleNumpad(key)}
+                        className={`h-9 flex items-center justify-center font-mono text-sm transition-colors active:scale-95 ${
+                          darkMode
+                            ? 'bg-neutral-900 text-neutral-200 hover:bg-neutral-800'
+                            : 'bg-white text-[#1c1b1b] hover:bg-[#f5f5f5]'
+                        }`}
+                      >
+                        {key === 'DEL' ? '⌫' : key}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Commit */}
+                  <button
+                    onClick={handleAddManualRefill}
+                    disabled={!manualIngredient || !manualAmount || Number(manualAmount) <= 0}
+                    className={`w-full py-2 text-[10px] font-mono tracking-wider uppercase rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                      darkMode ? 'bg-[#00f0ff] text-black hover:bg-[#00dbe9]' : 'bg-[#1c1b1b] text-white hover:bg-black'
+                    }`}
+                  >
+                    Commit Log Entry
+                  </button>
+                </div>
               </div>
-              <button
-                type="submit"
-                className={`w-full py-2 text-[10px] font-mono tracking-wider uppercase rounded ${
-                  darkMode ? 'bg-[#00f0ff] text-black hover:bg-[#00dbe9]' : 'bg-[#1c1b1b] text-white hover:bg-black'
-                }`}
-              >
-                COMMIT LOG ENTRY
-              </button>
-            </form>
-          )}
+            </div>
+          </div>
 
           {/* Table matching the visual specs perfectly */}
           <div className="overflow-x-auto">
@@ -264,27 +429,59 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
               </thead>
               <tbody className={`divide-y transition-colors ${darkMode ? 'divide-neutral-800' : 'divide-[#f0edec]'}`}>
                 {refills.map((refill) => (
-                  <tr key={refill.id} className={`transition-colors ${
-                    darkMode ? 'hover:bg-neutral-850/40' : 'hover:bg-[#fcf9f8]/40'
-                  }`}>
-                    <td className="py-3 font-semibold">{refill.ingredientName}</td>
-                    <td className={`py-3 font-mono font-bold ${darkMode ? 'text-[#00f0ff]' : 'text-[#006970]'}`}>{refill.qtyAdded}</td>
-                    <td className="py-3">
-                      <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded uppercase font-bold tracking-wider ${
-                        refill.method === 'OPTICAL AI' 
-                          ? (darkMode 
-                              ? 'bg-[#00f0ff]/20 text-[#00f0ff] border border-[#00f0ff]/30' 
-                              : 'bg-[#00f0ff]/10 text-[#006970] border border-[#00dbe9]/30'
-                            )
-                          : (darkMode 
-                              ? 'bg-neutral-800 text-neutral-300' 
-                              : 'bg-neutral-100 text-neutral-600'
-                            )
-                      }`}>
-                        {refill.method}
-                      </span>
+                  <tr key={refill.id}>
+                    <td colSpan={4} className="p-0 relative overflow-hidden">
+                      {/* Delete background */}
+                      <button
+                        onClick={() => onDeleteRefill(refill.id)}
+                        className={`absolute inset-y-0 right-0 flex items-center justify-center text-white ${
+                          darkMode ? 'bg-red-900/80' : 'bg-[#ba1a1a]'
+                        }`}
+                        style={{
+                          width: `${Math.max(DELETE_WIDTH, -(swipeOffsets[refill.id] || 0))}px`,
+                          transition: swipeRef.current?.id === refill.id ? 'none' : 'width 200ms ease-out'
+                        }}
+                        aria-label="Delete refill"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+
+                      {/* Swipeable row content */}
+                      <div
+                        className={`relative w-full grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-4 py-3 select-none touch-pan-y transition-colors ${
+                          darkMode ? 'bg-neutral-900 hover:bg-neutral-850/40' : 'bg-white hover:bg-[#fcf9f8]/40'
+                        }`}
+                        style={{
+                          transform: `translateX(${swipeOffsets[refill.id] || 0}px)`,
+                          transition: swipeRef.current?.id === refill.id ? 'none' : 'transform 200ms ease-out'
+                        }}
+                        onPointerDown={e => {
+                          e.currentTarget.setPointerCapture(e.pointerId);
+                          handlePointerStart(refill.id, e.clientX);
+                        }}
+                        onPointerMove={e => handlePointerMove(refill.id, e.clientX)}
+                        onPointerUp={e => handlePointerEnd(refill.id, e.clientX)}
+                      >
+                        <span className="font-semibold truncate">{refill.ingredientName}</span>
+                        <span className={`font-mono font-bold ${darkMode ? 'text-[#00f0ff]' : 'text-[#006970]'}`}>{refill.qtyAdded}</span>
+                        <span className="whitespace-nowrap">
+                          <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded uppercase font-bold tracking-wider whitespace-nowrap ${
+                            refill.method === 'OPTICAL AI'
+                              ? (darkMode
+                                  ? 'bg-[#00f0ff]/20 text-[#00f0ff] border border-[#00f0ff]/30'
+                                  : 'bg-[#00f0ff]/10 text-[#006970] border border-[#00dbe9]/30'
+                                )
+                              : (darkMode
+                                  ? 'bg-neutral-800 text-neutral-300'
+                                  : 'bg-neutral-100 text-neutral-600'
+                                )
+                          }`}>
+                            {refill.method}
+                          </span>
+                        </span>
+                        <span className={`text-right font-mono ${darkMode ? 'text-neutral-400' : 'text-[#3b494b]'}`}>{refill.confidence}%</span>
+                      </div>
                     </td>
-                    <td className={`py-3 text-right font-mono ${darkMode ? 'text-neutral-400' : 'text-[#3b494b]'}`}>{refill.confidence}%</td>
                   </tr>
                 ))}
               </tbody>

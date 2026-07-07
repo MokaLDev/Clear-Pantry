@@ -119,6 +119,11 @@ export default function App() {
     setRefills(prev => [...newRefills, ...prev]);
   };
 
+  // Handler: Delete a refill log entry
+  const handleDeleteRefill = (id: string) => {
+    setRefills(prev => prev.filter(r => r.id !== id));
+  };
+
   // Handler: Manual restock logging from Dashboard
   const handleManualRefill = (name: string, qty: string) => {
     // Attempt to match named ingredient
@@ -218,6 +223,7 @@ export default function App() {
             ingredients={ingredients}
             refills={refills}
             onManualRefill={handleManualRefill}
+            onDeleteRefill={handleDeleteRefill}
             darkMode={config.darkMode}
           />
         );
