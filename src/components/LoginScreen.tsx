@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { User as UserIcon, Lock, ArrowRight, Utensils } from 'lucide-react';
 import { User } from '../types';
+import { useI18n } from '../i18n';
 
 interface LoginScreenProps {
   onLogin: (user: User) => void;
@@ -12,6 +13,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const { t } = useI18n();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,7 +21,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
 
     const trimmedName = username.trim();
     if (!trimmedName || !password) {
-      setError('Please enter both username and password.');
+      setError(t('login.errors.missingFields'));
       return;
     }
 
@@ -35,13 +37,13 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
       const result = await response.json();
 
       if (!response.ok) {
-        setError(result.message || 'Something went wrong. Please try again.');
+        setError(result.message || t('login.errors.generic'));
         return;
       }
 
       onLogin(result.user as User);
     } catch {
-      setError('Unable to reach the server. Is it running?');
+      setError(t('login.errors.serverUnreachable'));
     } finally {
       setLoading(false);
     }
@@ -58,8 +60,8 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
           <div className="w-16 h-16 rounded-full border border-[#e5e2e1] bg-white flex items-center justify-center shadow-sm mb-4">
             <Utensils size={24} className="text-[#006970]" />
           </div>
-          <h1 className="text-xl font-bold tracking-tight text-[#1c1b1b]">Clear Pantry</h1>
-          <p className="text-xs text-[#6a7a7b] mt-1">Sign in to manage your kitchen.</p>
+          <h1 className="text-xl font-bold tracking-tight text-[#1c1b1b]">{t('login.brand')}</h1>
+          <p className="text-xs text-[#6a7a7b] mt-1">{t('login.subtitle')}</p>
         </div>
 
         {/* Auth card */}
@@ -76,7 +78,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
                 !isSignUp ? 'bg-white text-[#006970] shadow-sm' : 'text-[#6a7a7b] hover:text-[#1c1b1b]'
               }`}
             >
-              LOG IN
+              {t('login.logIn')}
             </button>
             <button
               type="button"
@@ -88,14 +90,14 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
                 isSignUp ? 'bg-white text-[#006970] shadow-sm' : 'text-[#6a7a7b] hover:text-[#1c1b1b]'
               }`}
             >
-              SIGN UP
+              {t('login.signUp')}
             </button>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-[#6a7a7b] mb-1.5">
-                Username
+                {t('login.username')}
               </label>
               <div className="relative">
                 <UserIcon
@@ -106,7 +108,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter username"
+                  placeholder={t('login.usernamePlaceholder')}
                   className="w-full bg-[#fcf9f8] border border-[#e5e2e1] rounded pl-9 pr-3 py-2.5 text-sm text-[#1c1b1b] placeholder:text-[#9ca3af] focus:outline-none focus:border-[#006970] focus:ring-1 focus:ring-[#006970] transition-all"
                   autoComplete="username"
                 />
@@ -115,7 +117,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
 
             <div>
               <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-[#6a7a7b] mb-1.5">
-                Password
+                {t('login.password')}
               </label>
               <div className="relative">
                 <Lock
@@ -126,7 +128,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter password"
+                  placeholder={t('login.passwordPlaceholder')}
                   className="w-full bg-[#fcf9f8] border border-[#e5e2e1] rounded pl-9 pr-3 py-2.5 text-sm text-[#1c1b1b] placeholder:text-[#9ca3af] focus:outline-none focus:border-[#006970] focus:ring-1 focus:ring-[#006970] transition-all"
                   autoComplete={isSignUp ? 'new-password' : 'current-password'}
                 />
@@ -144,13 +146,13 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
               disabled={loading}
               className="w-full py-3 bg-[#1c1b1b] text-white hover:bg-black active:scale-[0.98] transition-all font-mono text-xs font-bold tracking-[0.15em] flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {loading ? 'PROCESSING...' : isSignUp ? 'CREATE ACCOUNT' : 'ENTER KITCHEN'}
+              {loading ? t('login.submit.processing') : isSignUp ? t('login.submit.createAccount') : t('login.submit.enterKitchen')}
               {!loading && <ArrowRight size={14} />}
             </button>
           </form>
 
           <p className="text-[10px] text-center text-[#6a7a7b] mt-4">
-            {isSignUp ? 'Already have an account? ' : 'New here? '}
+            {isSignUp ? t('login.footer.alreadyHaveAccount') : t('login.footer.newHere')}
             <button
               type="button"
               onClick={() => {
@@ -159,13 +161,13 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
               }}
               className="text-[#006970] font-semibold hover:underline"
             >
-              {isSignUp ? 'Log in' : 'Sign up'}
+              {isSignUp ? t('login.footer.logInLink') : t('login.footer.signUpLink')}
             </button>
           </p>
         </div>
 
         <p className="text-[9px] text-center text-[#9ca3af] mt-6 font-mono">
-          MOCK ACCOUNTS: demo / demo123 &nbsp;|&nbsp; chef / kitchen
+          {t('login.mockAccounts')}
         </p>
       </div>
     </div>

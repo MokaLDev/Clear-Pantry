@@ -8,15 +8,31 @@ import AnalyzeScreen from './components/AnalyzeScreen';
 import InventoryScreen from './components/InventoryScreen';
 import SettingsScreen from './components/SettingsScreen';
 import { Home, Camera, LayoutGrid, Settings } from 'lucide-react';
+import { I18nProvider, translate } from './i18n';
+import type { Language } from './i18n';
 
 const DEMO_USER_ID = 'user-001';
+const SUPPORTED_LANGUAGES: Language[] = ['en', 'zh', 'es'];
+
+function normalizeLanguage(lang: string): Language {
+  const legacyMap: Record<string, Language> = {
+    'English (US)': 'en',
+    'Spanish (ES)': 'es',
+    'Chinese (ZH)': 'zh',
+    'German (DE)': 'en',
+    'French (FR)': 'en'
+  };
+  if (legacyMap[lang]) return legacyMap[lang];
+  if (SUPPORTED_LANGUAGES.includes(lang as Language)) return lang as Language;
+  return 'en';
+}
 
 const DEFAULT_KITCHEN: KitchenData = {
   ingredients: [],
   refills: [],
   config: {
     darkMode: false,
-    language: 'English (US)',
+    language: 'en',
     reportGenerationLogic: 'Prioritize high-protein ingredients and list expiration dates in DD/MM/YYYY format...'
   }
 };
@@ -39,7 +55,7 @@ export default function App() {
   const refills = account?.kitchen.refills ?? [];
   const config = account?.kitchen.config ?? DEFAULT_KITCHEN.config;
 
-  const [dietAdvice, setDietAdvice] = useState<string>(DIETARY_ADVICE_POOL[0]);
+  const [dietAdvice, setDietAdvice] = useState<string>('');
 
   // Persist current user & tab to localStorage.
   useEffect(() => {
@@ -68,9 +84,16 @@ export default function App() {
       .then((data) => {
         if (cancelled) return;
         if (data.success) {
+          const normalizedKitchen = {
+            ...data.kitchen,
+            config: {
+              ...data.kitchen.config,
+              language: normalizeLanguage(data.kitchen.config.language || 'en')
+            }
+          };
           setAccount({
             user: currentUser,
-            kitchen: data.kitchen,
+            kitchen: normalizedKitchen,
             seenWelcome: data.seenWelcome
           });
         }
@@ -91,17 +114,23 @@ export default function App() {
   useEffect(() => {
     const query = config.reportGenerationLogic.toLowerCase();
     if (query.includes('protein') || query.includes('high-protein')) {
-      setDietAdvice("Protein priority requested: Consume Organic Eggs (50% remaining) and Greek Yogurt to fulfill your daily muscle-recovery requirements.");
+      setDietAdvice(translate(config.language, 'dietAdvice.protein'));
     } else if (query.includes('expiration') || query.includes('date') || query.includes('spoil') || query.includes('fresh')) {
-      setDietAdvice("Freshness constraint matched: Consume Spinach (Organic) and Fresh Basil immediately, as their spoilage risk scores have escalated to High.");
+      setDietAdvice(translate(config.language, 'dietAdvice.fresh'));
     } else if (query.includes('carb') || query.includes('rice') || query.includes('energy')) {
-      setDietAdvice("Carbohydrate focus: Incorporate Basmati Rice (92% remaining) with healthy dietary fats to sustain longer morning training blocks.");
+      setDietAdvice(translate(config.language, 'dietAdvice.carb'));
     } else if (query.includes('waste') || query.includes('low') || query.includes('cheap')) {
-      setDietAdvice("Zero-waste strategy active: We generated meal plans utilizing flour and leftover oat milk to reduce culinary carbon footprint by 14%.");
+      setDietAdvice(translate(config.language, 'dietAdvice.waste'));
     } else {
-      setDietAdvice(DIETARY_ADVICE_POOL[Math.floor(Math.random() * DIETARY_ADVICE_POOL.length)]);
+      const pool = [
+        translate(config.language, 'dietAdvice.greens'),
+        translate(config.language, 'dietAdvice.spoilage'),
+        translate(config.language, 'dietAdvice.highProtein'),
+        translate(config.language, 'dietAdvice.lowStock')
+      ];
+      setDietAdvice(pool[Math.floor(Math.random() * pool.length)]);
     }
-  }, [config.reportGenerationLogic]);
+  }, [config.reportGenerationLogic, config.language]);
 
   // Persist kitchen changes to the server (except for the demo account).
   useEffect(() => {
@@ -333,73 +362,78 @@ export default function App() {
   };
 
   return (
-    <div className={`h-screen w-full flex flex-col overflow-hidden transition-colors duration-300 ${
-      config.darkMode ? 'bg-[#121212] text-white' : 'bg-[#fcf9f8] text-[#1c1b1b]'
-    }`}>
-      <div className="flex-1 w-full max-w-5xl mx-auto flex flex-col overflow-hidden relative">
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {!currentUser ? (
-            <LoginScreen onLogin={handleLogin} />
-          ) : loadingAccount || !account ? (
-            <div className="flex-1 flex flex-col items-center justify-center font-sans">
-              <div className="w-8 h-8 border-2 border-[#006970] border-t-transparent rounded-full animate-spin" />
-              <p className="text-xs text-[#6a7a7b] mt-3 font-mono">LOADING KITCHEN DATA</p>
-            </div>
-          ) : !account.seenWelcome ? (
-            <WelcomeScreen onStart={handleStart} />
-          ) : (
-            <div className="flex-1 flex flex-col overflow-hidden relative">
-              <div className="flex-1 flex flex-col overflow-hidden">
-                {renderTabContent()}
+    <I18nProvider
+      language={normalizeLanguage(config.language)}
+      onChangeLanguage={(lang) => handleUpdateConfig({ language: lang })}
+    >
+      <div className={`h-screen w-full flex flex-col overflow-hidden transition-colors duration-300 ${
+        config.darkMode ? 'bg-[#121212] text-white' : 'bg-[#fcf9f8] text-[#1c1b1b]'
+      }`}>
+        <div className="flex-1 w-full max-w-5xl mx-auto flex flex-col overflow-hidden relative">
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {!currentUser ? (
+              <LoginScreen onLogin={handleLogin} />
+            ) : loadingAccount || !account ? (
+              <div className="flex-1 flex flex-col items-center justify-center font-sans">
+                <div className="w-8 h-8 border-2 border-[#006970] border-t-transparent rounded-full animate-spin" />
+                <p className="text-xs text-[#6a7a7b] mt-3 font-mono">{translate(normalizeLanguage(config.language), 'app.loadingKitchenData')}</p>
               </div>
+            ) : !account.seenWelcome ? (
+              <WelcomeScreen onStart={handleStart} />
+            ) : (
+              <div className="flex-1 flex flex-col overflow-hidden relative">
+                <div className="flex-1 flex flex-col overflow-hidden">
+                  {renderTabContent()}
+                </div>
 
-              <div className={`h-20 border-t flex justify-around items-center px-4 transition-all duration-700 shrink-0 ${
-                config.darkMode
-                  ? 'bg-neutral-900/95 border-neutral-800 text-neutral-400'
-                  : (currentTab === 'analyze'
-                      ? 'bg-neutral-950/95 border-neutral-900 text-neutral-400'
-                      : 'bg-white/95 border-[#e5e2e1] text-[#3b494b]')
-              } backdrop-blur-md pb-4`}>
-                <button
-                  id="tab-home"
-                  onClick={() => setCurrentTab('home')}
-                  className={`flex flex-col items-center gap-1 flex-1 py-1 ${getTabButtonClass('home')}`}
-                >
-                  <Home size={18} className={currentTab === 'home' ? 'scale-110' : ''} />
-                  <span className="text-[10px] font-mono tracking-wider font-semibold">HOME</span>
-                </button>
+                <div className={`h-20 border-t flex justify-around items-center px-4 transition-all duration-700 shrink-0 ${
+                  config.darkMode
+                    ? 'bg-neutral-900/95 border-neutral-800 text-neutral-400'
+                    : (currentTab === 'analyze'
+                        ? 'bg-neutral-950/95 border-neutral-900 text-neutral-400'
+                        : 'bg-white/95 border-[#e5e2e1] text-[#3b494b]')
+                } backdrop-blur-md pb-4`}>
+                  <button
+                    id="tab-home"
+                    onClick={() => setCurrentTab('home')}
+                    className={`flex flex-col items-center gap-1 flex-1 py-1 ${getTabButtonClass('home')}`}
+                  >
+                    <Home size={18} className={currentTab === 'home' ? 'scale-110' : ''} />
+                    <span className="text-[10px] font-mono tracking-wider font-semibold">{translate(normalizeLanguage(config.language), 'app.home')}</span>
+                  </button>
 
-                <button
-                  id="tab-analyze"
-                  onClick={() => setCurrentTab('analyze')}
-                  className={`flex flex-col items-center gap-1 flex-1 py-1 ${getTabButtonClass('analyze')}`}
-                >
-                  <Camera size={18} className={currentTab === 'analyze' ? 'scale-110' : ''} />
-                  <span className="text-[10px] font-mono tracking-wider font-semibold">ANALYZE</span>
-                </button>
+                  <button
+                    id="tab-analyze"
+                    onClick={() => setCurrentTab('analyze')}
+                    className={`flex flex-col items-center gap-1 flex-1 py-1 ${getTabButtonClass('analyze')}`}
+                  >
+                    <Camera size={18} className={currentTab === 'analyze' ? 'scale-110' : ''} />
+                    <span className="text-[10px] font-mono tracking-wider font-semibold">{translate(normalizeLanguage(config.language), 'app.analyze')}</span>
+                  </button>
 
-                <button
-                  id="tab-inventory"
-                  onClick={() => setCurrentTab('inventory')}
-                  className={`flex flex-col items-center gap-1 flex-1 py-1 ${getTabButtonClass('inventory')}`}
-                >
-                  <LayoutGrid size={18} className={currentTab === 'inventory' ? 'scale-110' : ''} />
-                  <span className="text-[10px] font-mono tracking-wider font-semibold">PANTRY</span>
-                </button>
+                  <button
+                    id="tab-inventory"
+                    onClick={() => setCurrentTab('inventory')}
+                    className={`flex flex-col items-center gap-1 flex-1 py-1 ${getTabButtonClass('inventory')}`}
+                  >
+                    <LayoutGrid size={18} className={currentTab === 'inventory' ? 'scale-110' : ''} />
+                    <span className="text-[10px] font-mono tracking-wider font-semibold">{translate(normalizeLanguage(config.language), 'app.pantry')}</span>
+                  </button>
 
-                <button
-                  id="tab-settings"
-                  onClick={() => setCurrentTab('settings')}
-                  className={`flex flex-col items-center gap-1 flex-1 py-1 ${getTabButtonClass('settings')}`}
-                >
-                  <Settings size={18} className={currentTab === 'settings' ? 'scale-110' : ''} />
-                  <span className="text-[10px] font-mono tracking-wider font-semibold">SETTINGS</span>
-                </button>
+                  <button
+                    id="tab-settings"
+                    onClick={() => setCurrentTab('settings')}
+                    className={`flex flex-col items-center gap-1 flex-1 py-1 ${getTabButtonClass('settings')}`}
+                  >
+                    <Settings size={18} className={currentTab === 'settings' ? 'scale-110' : ''} />
+                    <span className="text-[10px] font-mono tracking-wider font-semibold">{translate(normalizeLanguage(config.language), 'app.settings')}</span>
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </I18nProvider>
   );
 }

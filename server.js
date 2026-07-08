@@ -89,8 +89,8 @@ async function createServer() {
         refills: [],
         config: {
           darkMode: false,
-          language: 'English (US)',
-          reportGenerationLogic: ''
+          language: 'en',
+          reportGenerationLogic: 'Prioritize high-protein ingredients and list expiration dates in DD/MM/YYYY format...'
         }
       }
     };

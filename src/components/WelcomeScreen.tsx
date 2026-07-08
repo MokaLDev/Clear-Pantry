@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ArrowRight, X, Cpu, Radio } from 'lucide-react';
+import { ArrowRight, X } from 'lucide-react';
+import { useI18n } from '../i18n';
 
 interface WelcomeScreenProps {
   onStart: () => void;
@@ -7,6 +8,7 @@ interface WelcomeScreenProps {
 
 export default function WelcomeScreen({ onStart }: WelcomeScreenProps) {
   const [showIntro, setShowIntro] = useState(false);
+  const { t } = useI18n();
 
   return (
     <div className="relative w-full min-h-screen bg-[#fcf9f8] text-[#1c1b1b] flex flex-col justify-between p-6 overflow-y-auto font-sans">
@@ -16,10 +18,10 @@ export default function WelcomeScreen({ onStart }: WelcomeScreenProps) {
 
       {/* Top Margin Buffer */}
       <div className="w-full z-10 flex justify-between items-center pt-2">
-        <span className="text-[10px] tracking-widest text-[#6a7a7b] font-mono">CLEAR-PANTRY SYSTEM v0.92</span>
+        <span className="text-[10px] tracking-widest text-[#6a7a7b] font-mono">{t('welcome.systemVersion')}</span>
         <div className="flex items-center gap-1.5 bg-[#ebe7e7] px-2 py-0.5 rounded text-[10px] text-[#006970] font-mono">
           <span className="w-1.5 h-1.5 bg-[#006970] rounded-full animate-ping" />
-          ACTIVE
+          {t('welcome.active')}
         </div>
       </div>
 
@@ -37,7 +39,7 @@ export default function WelcomeScreen({ onStart }: WelcomeScreenProps) {
           {/* Micro Tag */}
           <div className="absolute -top-6 left-1/2 -translate-x-1/2 flex flex-col items-center">
             <span className="text-[9px] font-semibold font-mono tracking-[0.25em] text-[#6a7a7b] bg-[#fcf9f8] px-2 py-0.5 rounded border border-[#e5e2e1]">
-              [SYSTEM_READY]
+              {t('welcome.systemReady')}
             </span>
             <div className="w-px h-6 bg-[#b9cacb]/60 mt-1" />
           </div>
@@ -46,10 +48,10 @@ export default function WelcomeScreen({ onStart }: WelcomeScreenProps) {
         {/* Hero Welcome Message */}
         <div className="text-center max-w-sm px-2">
           <h1 className="text-2xl font-semibold text-[#1c1b1b] leading-tight mb-4 tracking-tight">
-            Welcome to your kitchen’s new nervous system.
+            {t('welcome.title')}
           </h1>
           <p className="text-sm text-[#3b494b] leading-relaxed max-w-[320px] mx-auto font-light">
-            Precision inventory tracking and culinary intelligence, quietly managing your essentials so you can focus on the craft.
+            {t('welcome.subtitle')}
           </p>
         </div>
 
@@ -60,7 +62,7 @@ export default function WelcomeScreen({ onStart }: WelcomeScreenProps) {
             onClick={onStart}
             className="w-full py-4 bg-[#1c1b1b] text-white hover:bg-black/90 active:scale-98 transition-all font-mono text-xs font-semibold tracking-[0.15em] flex items-center justify-center gap-2"
           >
-            GET STARTED
+            {t('welcome.getStarted')}
             <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" />
           </button>
           
@@ -69,7 +71,7 @@ export default function WelcomeScreen({ onStart }: WelcomeScreenProps) {
             onClick={() => setShowIntro(true)}
             className="w-full py-3 text-xs font-mono font-semibold text-[#3b494b] tracking-[0.15em] border-b border-[#b9cacb]/30 hover:text-[#006970] hover:border-[#006970] transition-all"
           >
-            LEARN MORE
+            {t('welcome.learnMore')}
           </button>
         </div>
       </div>
@@ -77,12 +79,12 @@ export default function WelcomeScreen({ onStart }: WelcomeScreenProps) {
       {/* Status Footer */}
       <div className="w-full border-t border-[#b9cacb]/20 pt-3 flex justify-between items-center z-10">
         <div className="flex flex-col">
-          <span className="text-[9px] font-mono text-[#6a7a7b] tracking-wider uppercase">Current Build</span>
-          <span className="text-xs font-mono text-[#3b494b] font-medium">V 0.92.14-STABLE</span>
+          <span className="text-[9px] font-mono text-[#6a7a7b] tracking-wider uppercase">{t('welcome.currentBuild')}</span>
+          <span className="text-xs font-mono text-[#3b494b] font-medium">{t('welcome.buildVersion')}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 bg-[#006970] rounded-full animate-ping" />
-          <span className="text-xs font-mono text-[#006970] font-medium tracking-wider uppercase">SYNCED</span>
+          <span className="text-xs font-mono text-[#006970] font-medium tracking-wider uppercase">{t('welcome.synced')}</span>
         </div>
       </div>
 
@@ -93,36 +95,37 @@ export default function WelcomeScreen({ onStart }: WelcomeScreenProps) {
             <button 
               onClick={() => setShowIntro(false)}
               className="absolute top-4 right-4 text-[#3b494b] hover:text-black transition-colors"
+              aria-label={t('welcome.capabilities.close')}
             >
               <X size={18} />
             </button>
 
             <div className="mb-6 border-b border-[#e5e2e1] pb-3">
               <span className="text-[10px] font-mono text-[#006970] tracking-[0.15em] uppercase font-bold block mb-1">
-                01 / CAPABILITIES
+                {t('welcome.capabilities.label')}
               </span>
-              <h3 className="text-lg font-bold text-[#1c1b1b]">Kitchen AI Capabilities</h3>
+              <h3 className="text-lg font-bold text-[#1c1b1b]">{t('welcome.capabilities.title')}</h3>
             </div>
 
             <div className="space-y-6">
               <div className="border-l-2 border-[#006970] pl-3">
-                <h4 className="text-sm font-semibold text-[#1c1b1b] mb-1">Visual Recognition</h4>
+                <h4 className="text-sm font-semibold text-[#1c1b1b] mb-1">{t('welcome.capabilities.visualRecognition')}</h4>
                 <p className="text-xs text-[#3b494b] leading-relaxed">
-                  Real-time ingredient tracking via high-precision AI vision. Simply scan containers with your camera to detect capacity levels.
+                  {t('welcome.capabilities.visualRecognitionDesc')}
                 </p>
               </div>
 
               <div className="border-l-2 border-[#b9cacb] pl-3">
-                <h4 className="text-sm font-semibold text-[#1c1b1b] mb-1">Predictive Depletion</h4>
+                <h4 className="text-sm font-semibold text-[#1c1b1b] mb-1">{t('welcome.capabilities.predictiveDepletion')}</h4>
                 <p className="text-xs text-[#3b494b] leading-relaxed">
-                  Sophisticated usage analytics forecast exactly when you'll need a restock based on your actual ingestion habits.
+                  {t('welcome.capabilities.predictiveDepletionDesc')}
                 </p>
               </div>
 
               <div className="border-l-2 border-[#b9cacb] pl-3">
-                <h4 className="text-sm font-semibold text-[#1c1b1b] mb-1">Zero-Waste Logic</h4>
+                <h4 className="text-sm font-semibold text-[#1c1b1b] mb-1">{t('welcome.capabilities.zeroWaste')}</h4>
                 <p className="text-xs text-[#3b494b] leading-relaxed">
-                  Automated custom dietary advice and smart recipes formulated on ingredient freshness windows and inventory volume.
+                  {t('welcome.capabilities.zeroWasteDesc')}
                 </p>
               </div>
             </div>
@@ -134,7 +137,7 @@ export default function WelcomeScreen({ onStart }: WelcomeScreenProps) {
               }}
               className="w-full mt-6 py-3 bg-[#006970] text-white hover:bg-[#005a61] transition-colors font-mono text-xs font-semibold tracking-wider"
             >
-              INITIALIZE ENVIRONMENT
+              {t('welcome.capabilities.initialize')}
             </button>
           </div>
         </div>

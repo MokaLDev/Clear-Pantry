@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Ingredient, RefillRecord } from '../types';
 import { ArrowUpRight, ShieldAlert, Cpu, Check, HelpCircle, ChevronRight, X, ChevronDown, Trash2 } from 'lucide-react';
+import { useI18n } from '../i18n';
 
 interface InventoryScreenProps {
   ingredients: Ingredient[];
@@ -23,6 +24,7 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
   const DELETE_EXTRA = 56;
   const DELETE_TRIGGER = -(DELETE_WIDTH + DELETE_EXTRA); // -120
   const MAX_DRAG = DELETE_WIDTH + DELETE_EXTRA * 2; // 176
+  const { t } = useI18n();
 
   const UNITS = ['g', 'kg', 'ml', 'l', 'oz', 'lb', 'pcs', '%'];
 
@@ -57,7 +59,15 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
   // Spoilage risk items (High risk or critical status)
   const spoilageItems = ingredients.filter(i => i.spoilageRisk === 'High');
 
-  const days = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+  const days = [
+    t('common.days.mon'),
+    t('common.days.tue'),
+    t('common.days.wed'),
+    t('common.days.thu'),
+    t('common.days.fri'),
+    t('common.days.sat'),
+    t('common.days.sun')
+  ];
 
   // Derive depletion trend from actual ingredient data.
   const avgPercentage = ingredients.length
@@ -159,6 +169,12 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
     swipeRef.current = null;
   };
 
+  const methodLabel = (method: RefillRecord['method']) =>
+    method === 'OPTICAL AI' ? t('common.methods.opticalAi') : t('common.methods.manual');
+
+  const riskLabel = (risk: Ingredient['spoilageRisk']) =>
+    t('inventory.riskLabel', { risk: t(`common.risk.${risk.toLowerCase()}`) });
+
   return (
     <div className={`w-full flex-1 flex flex-col font-sans overflow-y-auto pb-24 transition-colors duration-300 ${
       darkMode ? 'bg-[#121212] text-white' : 'bg-[#fcf9f8] text-[#1c1b1b]'
@@ -167,8 +183,8 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
       <div className={`px-6 pt-6 pb-4 border-b transition-colors duration-300 ${
         darkMode ? 'border-neutral-800' : 'border-[#e5e2e1]'
       } mb-4`}>
-        <h2 className="text-xl font-bold tracking-tight">Dashboard</h2>
-        <p className={`text-xs font-light ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>Ingredient depletion & intake analysis</p>
+        <h2 className="text-xl font-bold tracking-tight">{t('inventory.dashboard')}</h2>
+        <p className={`text-xs font-light ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>{t('inventory.subtitle')}</p>
       </div>
 
       <div className="px-6 space-y-4">
@@ -184,18 +200,18 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
                 <span className={`text-[9px] font-mono tracking-widest uppercase font-bold block ${
                   darkMode ? 'text-[#00f0ff]' : 'text-[#006970]'
                 }`}>
-                  [ DEPLETION TREND ]
+                  {t('inventory.depletionTrend')}
                 </span>
-                <h3 className="text-sm font-bold mt-0.5">Remaining Stocks</h3>
+                <h3 className="text-sm font-bold mt-0.5">{t('inventory.remainingStocks')}</h3>
               </div>
               <div className={`flex items-center gap-3 text-[10px] font-mono ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
                 <div className="flex items-center gap-1.5">
                   <span className={`w-2.5 h-0.5 inline-block ${darkMode ? 'bg-[#00f0ff]' : 'bg-[#006970]'}`} />
-                  <span>{isDemo ? 'PROTEIN' : 'AVG STOCK'}</span>
+                  <span>{isDemo ? t('inventory.protein') : t('inventory.avgStock')}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <span className={`w-2.5 h-0.5 border-t border-dashed inline-block ${darkMode ? 'border-[#a78bfa]' : 'border-[#5400c3]'}`} />
-                  <span>{isDemo ? 'FIBER' : 'AVG FRESHNESS'}</span>
+                  <span>{isDemo ? t('inventory.fiber') : t('inventory.avgFreshness')}</span>
                 </div>
               </div>
             </div>
@@ -245,7 +261,7 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
                           <g>
                             <rect x={x - 45} y={y - 30} width="90" height="20" fill="black" rx="2" className="opacity-90" />
                             <text x={x} y={y - 17} fill="white" fontSize="9" textAnchor="middle" fontFamily="monospace">
-                              {[85, 78, 62, 55, 48, 52, 40][idx]}% REMAINING
+                              {t('common.remaining', { value: [85, 78, 62, 55, 48, 52, 40][idx] })}
                             </text>
                           </g>
                         )}
@@ -256,7 +272,7 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
               ) : ingredients.length === 0 ? (
                 <div className={`flex items-center justify-center h-full rounded ${darkMode ? 'bg-neutral-950/50' : 'bg-[#fcf9f8]'}`}>
                   <span className={`text-[11px] ${darkMode ? 'text-neutral-500' : 'text-[#9ca3af]'}`}>
-                    Add ingredients to see depletion trends
+                    {t('inventory.emptyTrend')}
                   </span>
                 </div>
               ) : (
@@ -306,7 +322,7 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
                           <g>
                             <rect x={x - 45} y={y - 30} width="90" height="20" fill="black" rx="2" className="opacity-90" />
                             <text x={x} y={y - 17} fill="white" fontSize="9" textAnchor="middle" fontFamily="monospace">
-                              {value}% REMAINING
+                              {t('common.remaining', { value })}
                             </text>
                           </g>
                         )}
@@ -322,7 +338,7 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
                     ? 'bg-neutral-950/95 border-neutral-800 text-[#00f0ff]'
                     : 'bg-white/95 border-[#b9cacb]/40 text-[#006970]'
                 }`}>
-                  PROTEIN - 12% REMAINING
+                  {t('analyze.proteinLabel')}
                 </div>
               ) : ingredients.length > 0 && (
                 <div className={`absolute top-[35%] left-[32%] border text-[9px] font-mono font-semibold px-2 py-1 rounded shadow-sm tracking-wider transition-colors duration-300 ${
@@ -330,7 +346,7 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
                     ? 'bg-neutral-950/95 border-neutral-800 text-[#00f0ff]'
                     : 'bg-white/95 border-[#b9cacb]/40 text-[#006970]'
                 }`}>
-                  AVG STOCK - {avgPercentage}% REMAINING
+                  {t('analyze.avgStockLabel', { value: avgPercentage })}
                 </div>
               )}
             </div>
@@ -348,9 +364,9 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
             darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-[#e5e2e1]'
           }`}>
             <span className="text-[9px] font-mono tracking-widest text-[#ba1a1a] uppercase font-bold block mb-3">
-              [ CRITICAL STATS ]
+              {t('inventory.criticalStats')}
             </span>
-            <h3 className="text-sm font-bold mb-4">Spoilage Risk</h3>
+            <h3 className="text-sm font-bold mb-4">{t('inventory.spoilageRisk')}</h3>
 
             <div className="space-y-4">
               {spoilageItems.map(item => (
@@ -359,12 +375,12 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
                 }`}>
                   <div>
                     <h4 className="text-xs font-bold">{item.name}</h4>
-                    <span className={`text-[10px] ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>Freshness: {item.freshness}%</span>
+                    <span className={`text-[10px] ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>{t('inventory.freshness', { value: item.freshness })}</span>
                   </div>
                   <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${
                     darkMode ? 'bg-red-950 text-red-400 border border-red-900/30' : 'bg-[#ffdad6] text-[#ba1a1a]'
                   }`}>
-                    {item.spoilageRisk} Risk
+                    {riskLabel(item.spoilageRisk)}
                   </span>
                 </div>
               ))}
@@ -378,7 +394,7 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
                   : 'bg-[#fcf9f8] hover:bg-[#f0edec] border-[#e5e2e1] text-[#3b494b]'
               }`}
             >
-              QUICK LOG SPINACH CONSUMPTION
+              {t('inventory.quickLogSpinach')}
             </button>
           </div>
         </div>
@@ -390,17 +406,17 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
           <div className="flex justify-between items-center mb-5">
             <div className="flex items-center gap-2">
               <Cpu className={darkMode ? 'text-[#00f0ff]' : 'text-[#006970]'} size={16} />
-              <h3 className="text-sm font-bold">Refills Detected</h3>
+              <h3 className="text-sm font-bold">{t('inventory.refillsDetected')}</h3>
             </div>
             <div className="flex items-center gap-2">
-              <span className={`text-[9px] font-mono tracking-wider uppercase ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>SYNCED 2M AGO</span>
+              <span className={`text-[9px] font-mono tracking-wider uppercase ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>{t('inventory.synced')}</span>
               <button 
                 onClick={() => showManualForm ? closeManualForm() : setShowManualForm(true)}
                 className={`text-[10px] font-mono px-2 py-1 rounded transition-colors ${
                   darkMode ? 'bg-[#00f0ff] text-black hover:bg-[#00dbe9]' : 'bg-[#006970] text-white hover:bg-[#005a61]'
                 }`}
               >
-                + MANUAL LOG
+                {t('inventory.manualLog')}
               </button>
             </div>
           </div>
@@ -417,14 +433,14 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
                   darkMode ? 'border-neutral-800' : 'border-[#e5e2e1]'
                 }`}>
                   <span className="text-[10px] font-mono tracking-widest uppercase font-bold">
-                    Manual Stock Restock Log
+                    {t('inventory.manualForm.title')}
                   </span>
                   <button
                     onClick={closeManualForm}
                     className={`p-1 rounded transition-colors ${
                       darkMode ? 'hover:bg-neutral-800 text-neutral-400' : 'hover:bg-[#f0edec] text-[#6a7a7b]'
                     }`}
-                    aria-label="Close"
+                    aria-label={t('inventory.manualForm.close')}
                   >
                     <X size={14} />
                   </button>
@@ -434,7 +450,7 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
                   {/* Ingredient input */}
                   <input
                     type="text"
-                    placeholder="Ingredient (e.g. Flour)"
+                    placeholder={t('inventory.manualForm.ingredientPlaceholder')}
                     value={manualIngredient}
                     onChange={(e) => setManualIngredient(e.target.value)}
                     className={`w-full border text-xs p-2.5 rounded focus:outline-none transition-colors ${
@@ -491,7 +507,7 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
                             : 'bg-white text-[#1c1b1b] hover:bg-[#f5f5f5]'
                         }`}
                       >
-                        {key === 'DEL' ? '⌫' : key}
+                        {key === 'DEL' ? t('inventory.manualForm.del') : key}
                       </button>
                     ))}
                   </div>
@@ -504,7 +520,7 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
                       darkMode ? 'bg-[#00f0ff] text-black hover:bg-[#00dbe9]' : 'bg-[#1c1b1b] text-white hover:bg-black'
                     }`}
                   >
-                    Commit Log Entry
+                    {t('inventory.manualForm.commit')}
                   </button>
                 </div>
               </div>
@@ -518,10 +534,10 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
                 <tr className={`border-b font-mono text-[10px] tracking-widest uppercase transition-colors ${
                   darkMode ? 'border-neutral-800 text-neutral-400' : 'border-[#e5e2e1] text-[#6a7a7b]'
                 }`}>
-                  <th className="py-2.5 font-normal">Ingredient</th>
-                  <th className="py-2.5 font-normal">Qty Added</th>
-                  <th className="py-2.5 font-normal">Method</th>
-                  <th className="py-2.5 font-normal text-right">Confidence</th>
+                  <th className="py-2.5 font-normal">{t('inventory.table.ingredient')}</th>
+                  <th className="py-2.5 font-normal">{t('inventory.table.qtyAdded')}</th>
+                  <th className="py-2.5 font-normal">{t('inventory.table.method')}</th>
+                  <th className="py-2.5 font-normal text-right">{t('inventory.table.confidence')}</th>
                 </tr>
               </thead>
               <tbody className={`divide-y transition-colors ${darkMode ? 'divide-neutral-800' : 'divide-[#f0edec]'}`}>
@@ -538,7 +554,7 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
                           width: `${(swipeOffsets[refill.id] || 0) < 0 ? Math.min(-(swipeOffsets[refill.id] || 0), MAX_DRAG) : 0}px`,
                           transition: swipeRef.current?.id === refill.id ? 'none' : 'width 200ms ease-out'
                         }}
-                        aria-label="Delete refill"
+                        aria-label={t('inventory.deleteRefill')}
                       >
                         <Trash2 size={18} />
                       </button>
@@ -573,7 +589,7 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
                                   : 'bg-neutral-100 text-neutral-600'
                                 )
                           }`}>
-                            {refill.method}
+                            {methodLabel(refill.method)}
                           </span>
                         </span>
                         <span className={`text-right font-mono ${darkMode ? 'text-neutral-400' : 'text-[#3b494b]'}`}>{refill.confidence}%</span>
@@ -595,10 +611,10 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
             </div>
             <div>
               <span className="text-[9px] font-mono tracking-widest text-[#ddcdff] uppercase font-bold block">
-                Consumption Insight
+                {t('inventory.consumptionInsight')}
               </span>
               <p className="text-xs md:text-sm font-semibold mt-1 leading-relaxed max-w-md text-white">
-                You're consuming 15% more protein this week than your 30-day average.
+                {t('inventory.consumptionInsightDesc')}
               </p>
             </div>
           </div>

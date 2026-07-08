@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { UserConfig, User } from '../types';
 import { Check, Globe, Terminal, User as UserIcon, LogOut, Trash2 } from 'lucide-react';
+import { useI18n } from '../i18n';
+import type { Language } from '../i18n';
 
 interface SettingsScreenProps {
   config: UserConfig;
@@ -14,6 +16,7 @@ interface SettingsScreenProps {
 export default function SettingsScreen({ config, user, onUpdateConfig, onResetData, onLogout, onDeleteAccount }: SettingsScreenProps) {
   const [logicInput, setLogicInput] = useState(config.reportGenerationLogic);
   const [successMsg, setSuccessMsg] = useState(false);
+  const { t } = useI18n();
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,8 +33,8 @@ export default function SettingsScreen({ config, user, onUpdateConfig, onResetDa
       <div className={`px-6 pt-6 pb-4 border-b transition-colors duration-300 ${
         config.darkMode ? 'border-neutral-800' : 'border-[#e5e2e1]'
       } mb-6`}>
-        <h2 className="text-xl font-bold tracking-tight">Settings</h2>
-        <p className={`text-xs font-light ${config.darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>Configure your kitchen intelligence environment.</p>
+        <h2 className="text-xl font-bold tracking-tight">{t('settings.title')}</h2>
+        <p className={`text-xs font-light ${config.darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>{t('settings.subtitle')}</p>
       </div>
 
       <div className="px-6 space-y-5 max-w-xl mx-auto w-full">
@@ -46,9 +49,9 @@ export default function SettingsScreen({ config, user, onUpdateConfig, onResetDa
               <UserIcon size={24} />
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="text-sm font-bold truncate">{user?.username || 'Guest'}</h3>
+              <h3 className="text-sm font-bold truncate">{user?.username || t('settings.personalCenter.guest')}</h3>
               <p className={`text-[11px] truncate ${config.darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
-                {user?.info || 'Personal kitchen account'}
+                {user?.info || t('settings.personalCenter.defaultInfo')}
               </p>
             </div>
           </div>
@@ -58,7 +61,7 @@ export default function SettingsScreen({ config, user, onUpdateConfig, onResetDa
           } space-y-3`}>
             <button
               onClick={() => {
-                if (window.confirm('Log out of your account?')) {
+                if (window.confirm(t('settings.personalCenter.logoutConfirm'))) {
                   onLogout();
                 }
               }}
@@ -69,16 +72,16 @@ export default function SettingsScreen({ config, user, onUpdateConfig, onResetDa
               }`}
             >
               <LogOut size={14} />
-              LOG OUT
+              {t('settings.personalCenter.logout')}
             </button>
 
             <button
               onClick={() => {
                 if (user?.username === 'demo') {
-                  alert('The demo account cannot be deleted.');
+                  alert(t('settings.personalCenter.demoCannotDelete'));
                   return;
                 }
-                if (window.confirm(`Delete account "${user?.username}" permanently? This cannot be undone.`)) {
+                if (window.confirm(t('settings.personalCenter.deleteConfirm', { username: user?.username || '' }))) {
                   onDeleteAccount();
                 }
               }}
@@ -89,7 +92,7 @@ export default function SettingsScreen({ config, user, onUpdateConfig, onResetDa
               }`}
             >
               <Trash2 size={14} />
-              DELETE ACCOUNT
+              {t('settings.personalCenter.deleteAccount')}
             </button>
           </div>
         </div>
@@ -101,7 +104,7 @@ export default function SettingsScreen({ config, user, onUpdateConfig, onResetDa
           <span className={`text-[9px] font-mono tracking-widest uppercase font-bold block mb-4 ${
             config.darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'
           }`}>
-            Appearance
+            {t('settings.appearance')}
           </span>
 
           <div className="space-y-4">
@@ -110,9 +113,9 @@ export default function SettingsScreen({ config, user, onUpdateConfig, onResetDa
               config.darkMode ? 'border-neutral-800' : 'border-[#f0edec]'
             }`}>
               <div>
-                <h4 className="text-xs font-bold">Dark Mode</h4>
+                <h4 className="text-xs font-bold">{t('settings.darkMode')}</h4>
                 <p className={`text-[11px] leading-tight mt-0.5 ${config.darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
-                  Switch between light and laboratory-clean dark aesthetic.
+                  {t('settings.darkModeDesc')}
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer select-none">
@@ -131,9 +134,9 @@ export default function SettingsScreen({ config, user, onUpdateConfig, onResetDa
             {/* Language Selector */}
             <div className="flex justify-between items-center pt-1">
               <div>
-                <h4 className="text-xs font-bold">Language</h4>
+                <h4 className="text-xs font-bold">{t('settings.language')}</h4>
                 <p className={`text-[11px] leading-tight mt-0.5 ${config.darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
-                  Preferred interface localization.
+                  {t('settings.languageDesc')}
                 </p>
               </div>
               <div className="relative">
@@ -149,10 +152,9 @@ export default function SettingsScreen({ config, user, onUpdateConfig, onResetDa
                       : 'bg-[#fcf9f8] border-[#e5e2e1] text-[#1c1b1b] focus:border-[#006970]'
                   }`}
                 >
-                  <option value="English (US)">English (US)</option>
-                  <option value="Spanish (ES)">Spanish (ES)</option>
-                  <option value="German (DE)">German (DE)</option>
-                  <option value="French (FR)">French (FR)</option>
+                  <option value="en">{t('settings.languages.en')}</option>
+                  <option value="zh">{t('settings.languages.zh')}</option>
+                  <option value="es">{t('settings.languages.es')}</option>
                 </select>
               </div>
             </div>
@@ -167,27 +169,27 @@ export default function SettingsScreen({ config, user, onUpdateConfig, onResetDa
             <span className={`text-[9px] font-mono tracking-widest uppercase font-bold block ${
               config.darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'
             }`}>
-              Intelligence Parameters
+              {t('settings.intelligence.title')}
             </span>
             <span className={`text-[9px] font-mono border px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${
               config.darkMode 
                 ? 'bg-[#00f0ff]/10 text-[#00f0ff] border-[#00f0ff]/30' 
                 : 'bg-[#00f0ff]/10 text-[#006970] border border-[#00dbe9]/30'
             }`}>
-              AI_AGENT: ACTIVE
+              {t('settings.intelligence.active')}
             </span>
           </div>
 
           <form onSubmit={handleSave} className="space-y-4">
             <div>
-              <h4 className="text-xs font-bold">Report Generation Logic</h4>
+              <h4 className="text-xs font-bold">{t('settings.intelligence.reportLogic')}</h4>
               <p className={`text-[11px] leading-relaxed mt-0.5 mb-2.5 ${config.darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
-                Define specific constraints or formatting rules for your automated kitchen inventory reports.
+                {t('settings.intelligence.reportLogicDesc')}
               </p>
               <textarea
                 value={logicInput}
                 onChange={(e) => setLogicInput(e.target.value)}
-                placeholder="e.g., Prioritize high-protein ingredients and list expiration dates in DD/MM/YYYY format..."
+                placeholder={t('settings.intelligence.placeholder')}
                 className={`w-full border rounded text-xs p-3 h-28 focus:outline-none font-sans leading-relaxed transition-colors ${
                   config.darkMode 
                     ? 'bg-neutral-950 border-neutral-850 text-white focus:border-[#00f0ff] focus:ring-1 focus:ring-[#00f0ff]' 
@@ -203,7 +205,7 @@ export default function SettingsScreen({ config, user, onUpdateConfig, onResetDa
                   : 'bg-[#f0f9fa] border-[#00dbe9]/30 text-[#006970]'
               }`}>
                 <Check size={12} />
-                CONFIGURATION UPDATED successfully
+                {t('settings.intelligence.updated')}
               </div>
             )}
 
@@ -215,7 +217,7 @@ export default function SettingsScreen({ config, user, onUpdateConfig, onResetDa
                   : 'bg-[#1c1b1b] text-white hover:bg-black'
               }`}
             >
-              SAVE CONFIGURATION
+              {t('settings.intelligence.save')}
             </button>
           </form>
         </div>
@@ -225,17 +227,17 @@ export default function SettingsScreen({ config, user, onUpdateConfig, onResetDa
           config.darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-[#e5e2e1]'
         }`}>
           <span className="text-[9px] font-mono tracking-widest text-[#ba1a1a] uppercase font-bold block mb-2">
-            System Diagnostics
+            {t('settings.diagnostics.title')}
           </span>
-          <h4 className="text-xs font-bold mb-1">State Reset</h4>
+          <h4 className="text-xs font-bold mb-1">{t('settings.diagnostics.stateReset')}</h4>
           <p className={`text-[11px] leading-relaxed mb-4 ${config.darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
-            Clear local storage state to restore original preset mock values and simulated refills logs.
+            {t('settings.diagnostics.stateResetDesc')}
           </p>
           <button
             onClick={() => {
-              if (window.confirm('Reset kitchen inventory state to default parameters?')) {
+              if (window.confirm(t('settings.diagnostics.resetConfirm'))) {
                 onResetData();
-                alert('Kitchen state restored.');
+                alert(t('settings.diagnostics.resetDone'));
               }
             }}
             className={`px-4 py-2 text-[10px] font-mono font-bold tracking-wider rounded transition-all ${
@@ -244,7 +246,7 @@ export default function SettingsScreen({ config, user, onUpdateConfig, onResetDa
                 : 'bg-white hover:bg-[#ffdad6]/20 border border-[#ba1a1a]/30 hover:border-[#ba1a1a] text-[#ba1a1a]'
             }`}
           >
-            RESTORE DEMO DEFAULTS
+            {t('settings.diagnostics.restoreDefaults')}
           </button>
         </div>
 
@@ -254,11 +256,11 @@ export default function SettingsScreen({ config, user, onUpdateConfig, onResetDa
         }`}>
           <div className="grid grid-cols-2 gap-8">
             <div>
-              <span className={`text-[9px] uppercase block ${config.darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>Version</span>
+              <span className={`text-[9px] uppercase block ${config.darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>{t('settings.version')}</span>
               <span className="text-xs font-bold mt-0.5 block">2.4.0-STABLE</span>
             </div>
             <div>
-              <span className={`text-[9px] uppercase block ${config.darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>Uptime</span>
+              <span className={`text-[9px] uppercase block ${config.darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>{t('settings.uptime')}</span>
               <span className="text-xs font-bold mt-0.5 block">142:22:04</span>
             </div>
           </div>

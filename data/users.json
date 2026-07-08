@@ -154,7 +154,7 @@
         ],
         "config": {
           "darkMode": false,
-          "language": "English (US)",
+          "language": "en",
           "reportGenerationLogic": "Prioritize high-protein ingredients and list expiration dates in DD/MM/YYYY format..."
         }
       }
@@ -313,7 +313,7 @@
         ],
         "config": {
           "darkMode": false,
-          "language": "English (US)",
+          "language": "en",
           "reportGenerationLogic": "Prioritize high-protein ingredients and list expiration dates in DD/MM/YYYY format..."
         }
       }
@@ -329,7 +329,7 @@
         "refills": [],
         "config": {
           "darkMode": false,
-          "language": "English (US)",
+          "language": "zh",
           "reportGenerationLogic": ""
         }
       }

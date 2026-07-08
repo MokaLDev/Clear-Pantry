@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Ingredient } from '../types';
 import { AlertTriangle, ShieldCheck, Thermometer, ChevronRight, CheckCircle, FlameKindling, UtensilsCrossed } from 'lucide-react';
+import { useI18n } from '../i18n';
 
 interface HomeScreenProps {
   ingredients: Ingredient[];
@@ -14,6 +15,7 @@ interface HomeScreenProps {
 export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, onNavigateToTab, darkMode, isDemo = false }: HomeScreenProps) {
   const [dismissed, setDismissed] = useState(false);
   const [showPlanModal, setShowPlanModal] = useState(false);
+  const { t } = useI18n();
 
   const criticalItems = ingredients.filter((i) => i.status === 'critical');
   const eggsItem = ingredients.find((i) => i.id === 'organic-eggs') || { currentQty: 6, maxQty: 12, percentage: 50 };
@@ -31,12 +33,12 @@ export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, o
         darkMode ? 'border-neutral-800' : 'border-[#e5e2e1]'
       }`}>
         <div>
-          <span className={`text-[10px] uppercase font-mono tracking-wider ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>Morning Analysis</span>
-          <h2 className="text-xl font-bold tracking-tight">Kitchen Status</h2>
+          <span className={`text-[10px] uppercase font-mono tracking-wider ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>{t('home.morningAnalysis')}</span>
+          <h2 className="text-xl font-bold tracking-tight">{t('home.kitchenStatus')}</h2>
         </div>
         <div className={`flex items-center gap-1.5 ${darkMode ? 'text-[#00f0ff]' : 'text-[#006970]'}`}>
           <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${darkMode ? 'bg-[#00f0ff]' : 'bg-[#006970]'}`} />
-          <span className="text-[11px] font-mono tracking-tight">All systems calibrated</span>
+          <span className="text-[11px] font-mono tracking-tight">{t('home.allSystemsCalibrated')}</span>
         </div>
       </div>
 
@@ -56,11 +58,11 @@ export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, o
                   <div className="flex items-center gap-2">
                     <span className={`text-xs font-mono font-semibold tracking-wider px-1.5 py-0.5 rounded ${
                       darkMode ? 'bg-red-950/80 text-red-300 border border-red-900/30' : 'bg-[#ffdad6] text-[#ba1a1a]'
-                    }`}>CRITICAL</span>
-                    <span className="text-xs font-bold">Flour Stock Critical</span>
+                    }`}>{t('common.status.critical')}</span>
+                    <span className="text-xs font-bold">{t('home.demo.flourCritical')}</span>
                   </div>
                   <p className={`text-[11px] mt-1.5 leading-relaxed ${darkMode ? 'text-neutral-300' : 'text-[#3b494b]'}`}>
-                    Estimated 120g remaining. 1.2kg needed for weekly prep schedules.
+                    {t('home.demo.flourCriticalDesc')}
                   </p>
                 </div>
               </div>
@@ -73,9 +75,9 @@ export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, o
                     <Thermometer size={18} />
                   </div>
                   <div>
-                    <span className={`text-[10px] font-mono block ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>PANTRY 1 • 18°C STABLE</span>
-                    <h4 className="text-xs font-bold mt-0.5">Olive Oil Suggested</h4>
-                    <p className={`text-[11px] leading-tight mt-0.5 ${darkMode ? 'text-neutral-300' : 'text-[#3b494b]'}`}>Refill recommended soon.</p>
+                    <span className={`text-[10px] font-mono block ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>{t('home.demo.pantryTemp')}</span>
+                    <h4 className="text-xs font-bold mt-0.5">{t('home.demo.oliveOilSuggested')}</h4>
+                    <p className={`text-[11px] leading-tight mt-0.5 ${darkMode ? 'text-neutral-300' : 'text-[#3b494b]'}`}>{t('home.demo.oliveOilSuggestedDesc')}</p>
                   </div>
                 </div>
                 <span className={`text-[9px] font-mono border px-1.5 py-0.5 rounded font-semibold tracking-wider uppercase ${
@@ -83,7 +85,7 @@ export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, o
                     ? 'bg-[#00f0ff]/20 text-[#00f0ff] border-[#00f0ff]/30'
                     : 'bg-[#00f0ff]/10 text-[#006970] border border-[#00dbe9]/30'
                 }`}>
-                  RESTOCK
+                  {t('common.status.restock')}
                 </span>
               </div>
             </>
@@ -102,11 +104,11 @@ export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, o
                   <div className="flex items-center gap-2">
                     <span className={`text-xs font-mono font-semibold tracking-wider px-1.5 py-0.5 rounded ${
                       darkMode ? 'bg-red-950/80 text-red-300 border border-red-900/30' : 'bg-[#ffdad6] text-[#ba1a1a]'
-                    }`}>CRITICAL</span>
+                    }`}>{t('common.status.critical')}</span>
                     <span className="text-xs font-bold">{item.name}</span>
                   </div>
                   <p className={`text-[11px] mt-1.5 leading-relaxed ${darkMode ? 'text-neutral-300' : 'text-[#3b494b]'}`}>
-                    {item.currentQty}{item.unit} remaining.
+                    {t('home.itemRemaining', { qty: item.currentQty, unit: item.unit })}
                   </p>
                 </div>
               </div>
@@ -120,9 +122,9 @@ export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, o
                   <AlertTriangle size={18} />
                 </div>
                 <div>
-                  <span className="text-xs font-bold">Critical Reports</span>
+                  <span className="text-xs font-bold">{t('home.criticalReports')}</span>
                   <p className={`text-[11px] mt-1.5 leading-relaxed ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
-                    No critical reports yet. Future AI analysis will surface low-stock and spoilage alerts here.
+                    {t('home.noCriticalReports')}
                   </p>
                 </div>
               </div>
@@ -134,9 +136,9 @@ export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, o
                   <Thermometer size={18} />
                 </div>
                 <div>
-                  <span className="text-xs font-bold">Restock Suggestions</span>
+                  <span className="text-xs font-bold">{t('home.restockSuggestions')}</span>
                   <p className={`text-[11px] mt-1.5 leading-relaxed ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
-                    No suggestions yet. Future AI will recommend restocks based on usage trends.
+                    {t('home.noSuggestions')}
                   </p>
                 </div>
               </div>
@@ -153,7 +155,7 @@ export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, o
               <span className={`text-[10px] font-mono tracking-[0.15em] font-bold block mb-2 uppercase ${
                 darkMode ? 'text-[#00f0ff]' : 'text-[#006970]'
               }`}>
-                Dietary Advice
+                {t('home.dietaryAdvice')}
               </span>
               <p className="text-sm font-semibold leading-relaxed mb-4 max-w-[90%]">
                 "{dietAdvice}"
@@ -165,7 +167,7 @@ export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, o
                     darkMode ? 'bg-[#00f0ff] text-black hover:bg-[#00dbe9]' : 'bg-[#1c1b1b] text-[#fcf9f8] hover:bg-black'
                   }`}
                 >
-                  VIEW PLAN
+                  {t('home.viewPlan')}
                 </button>
                 <button
                   onClick={() => setDismissed(true)}
@@ -175,7 +177,7 @@ export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, o
                       : 'border-[#b9cacb]/50 text-[#3b494b] hover:bg-[#ebe7e7]'
                   }`}
                 >
-                  DISMISS
+                  {t('home.dismiss')}
                 </button>
               </div>
             </div>
@@ -185,7 +187,7 @@ export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, o
                 ? 'bg-neutral-900/40 border-neutral-800'
                 : 'bg-[#ebe7e7]/40 border-[#b9cacb]/40'
             }`}>
-              <span className={`text-xs italic ${darkMode ? 'text-neutral-400' : 'text-[#3b494b]'}`}>Dietary advice card dismissed.</span>
+              <span className={`text-xs italic ${darkMode ? 'text-neutral-400' : 'text-[#3b494b]'}`}>{t('home.adviceDismissed')}</span>
               <button
                 onClick={() => {
                   onRefreshAdvice();
@@ -195,7 +197,7 @@ export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, o
                   darkMode ? 'text-[#00f0ff]' : 'text-[#006970]'
                 }`}
               >
-                Refresh & Restore Advice
+                {t('home.refreshAndRestore')}
               </button>
             </div>
           )
@@ -206,10 +208,10 @@ export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, o
             <span className={`text-[10px] font-mono tracking-[0.15em] font-bold block mb-2 uppercase ${
               darkMode ? 'text-[#00f0ff]' : 'text-[#006970]'
             }`}>
-              Dietary Advice
+              {t('home.dietaryAdvice')}
             </span>
             <p className={`text-sm leading-relaxed mb-1 max-w-[90%] ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
-              No personalized advice available yet. This section will be populated by the AI nutrition engine in a future update.
+              {t('home.noAdvice')}
             </p>
           </div>
         )}
@@ -222,30 +224,30 @@ export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, o
           }`}>
             <span className={`text-[10px] font-mono tracking-wider block mb-3 uppercase ${
               darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'
-            }`}>Consumption Trends</span>
+            }`}>{t('home.consumptionTrends')}</span>
             {isDemo ? (
               <div className="flex items-end justify-between h-20 pt-4 px-2">
                 <div className="flex flex-col items-center gap-1.5 w-full">
                   <div className={`w-7 h-8 rounded-sm transition-colors ${darkMode ? 'bg-[#00f0ff]/15 hover:bg-[#00f0ff]/30' : 'bg-[#00f0ff]/20 hover:bg-[#00f0ff]/40'}`} />
-                  <span className={`text-[9px] font-mono ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>MON</span>
+                  <span className={`text-[9px] font-mono ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>{t('common.days.mon')}</span>
                 </div>
                 <div className="flex flex-col items-center gap-1.5 w-full">
                   <div className={`w-7 h-12 rounded-sm transition-colors ${darkMode ? 'bg-[#00f0ff]/30 hover:bg-[#00f0ff]/50' : 'bg-[#00f0ff]/40 hover:bg-[#00f0ff]/60'}`} />
-                  <span className={`text-[9px] font-mono ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>TUE</span>
+                  <span className={`text-[9px] font-mono ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>{t('common.days.tue')}</span>
                 </div>
                 <div className="flex flex-col items-center gap-1.5 w-full">
                   <div className={`w-7 h-14 rounded-sm transition-colors ${darkMode ? 'bg-[#00f0ff]/50 hover:bg-[#00f0ff]/70' : 'bg-[#00f0ff]/60 hover:bg-[#00f0ff]/80'}`} />
-                  <span className={`text-[9px] font-mono ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>WED</span>
+                  <span className={`text-[9px] font-mono ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>{t('common.days.wed')}</span>
                 </div>
                 <div className="flex flex-col items-center gap-1.5 w-full">
                   <div className={`w-7 h-16 rounded-sm transition-colors ${darkMode ? 'bg-[#00f0ff] hover:bg-[#00dbe9]' : 'bg-[#006970] hover:bg-[#005a61]'}`} />
-                  <span className={`text-[9px] font-mono ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>THU</span>
+                  <span className={`text-[9px] font-mono ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>{t('common.days.thu')}</span>
                 </div>
               </div>
             ) : (
               <div className={`flex items-center justify-center h-20 rounded ${darkMode ? 'bg-neutral-950/50' : 'bg-[#fcf9f8]'}`}>
                 <span className={`text-[11px] ${darkMode ? 'text-neutral-500' : 'text-[#9ca3af]'}`}>
-                  No trend data available
+                  {t('home.noTrendData')}
                 </span>
               </div>
             )}
@@ -265,9 +267,9 @@ export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, o
               <span className={`absolute text-sm font-mono font-bold ${darkMode ? 'text-[#a78bfa]' : 'text-[#5400c3]'}`}>{averageFreshness}%</span>
             </div>
             <div>
-              <h4 className="text-xs font-bold">Freshness Score</h4>
+              <h4 className="text-xs font-bold">{t('home.freshnessScore')}</h4>
               <p className={`text-[11px] leading-relaxed mt-1 ${darkMode ? 'text-neutral-300' : 'text-[#3b494b]'}`}>
-                Average shelf life remaining across all perishables in your fridge & pantry.
+                {t('home.freshnessScoreDesc')}
               </p>
             </div>
           </div>
@@ -277,7 +279,7 @@ export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, o
         <div className={`border rounded p-5 shadow-sm transition-colors duration-300 ${
           darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-[#e5e2e1]'
         }`}>
-          <h3 className={`text-xs font-mono tracking-wider mb-4 uppercase ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>Recent Ingredient Usage</h3>
+          <h3 className={`text-xs font-mono tracking-wider mb-4 uppercase ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>{t('home.recentIngredientUsage')}</h3>
           {isDemo ? (
             <div className="space-y-4">
               {/* Eggs Slider */}
@@ -287,8 +289,8 @@ export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, o
                     🥚
                   </div>
                   <div>
-                    <h5 className="text-xs font-bold">Organic Eggs</h5>
-                    <span className={`text-[10px] ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>6 used • 6 remaining</span>
+                    <h5 className="text-xs font-bold">{t('home.demoEggs.name')}</h5>
+                    <span className={`text-[10px] ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>{t('home.demoEggs.detail')}</span>
                   </div>
                 </div>
                 <div className="w-32 flex items-center gap-2">
@@ -308,8 +310,8 @@ export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, o
                     🌾
                   </div>
                   <div>
-                    <h5 className="text-xs font-bold">Basmati Rice</h5>
-                    <span className={`text-[10px] ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>0.4kg used • 4.6kg remaining</span>
+                    <h5 className="text-xs font-bold">{t('home.demoRice.name')}</h5>
+                    <span className={`text-[10px] ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>{t('home.demoRice.detail')}</span>
                   </div>
                 </div>
                 <div className="w-32 flex items-center gap-2">
@@ -336,7 +338,7 @@ export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, o
                     <div>
                       <h5 className="text-xs font-bold">{item.name}</h5>
                       <span className={`text-[10px] ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
-                        {item.currentQty}{item.unit} remaining
+                        {t('home.itemRemaining', { qty: item.currentQty, unit: item.unit })}
                       </span>
                     </div>
                   </div>
@@ -354,7 +356,7 @@ export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, o
           ) : (
             <div className={`flex items-center justify-center h-20 rounded ${darkMode ? 'bg-neutral-950/50' : 'bg-[#fcf9f8]'}`}>
               <span className={`text-[11px] ${darkMode ? 'text-neutral-500' : 'text-[#9ca3af]'}`}>
-                No ingredient usage data yet
+                {t('home.noUsageData')}
               </span>
             </div>
           )}
@@ -369,7 +371,7 @@ export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, o
               : 'bg-[#ebe7e7] hover:bg-[#dcd9d9] text-[#1c1b1b]'
           }`}
         >
-          <span>LAUNCH VISUAL TRACING CAMERA TO CALIBRATE ITEMS</span>
+          <span>{t('home.cameraCta')}</span>
           <ChevronRight size={12} />
         </div>
       </div>
@@ -382,32 +384,32 @@ export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, o
           }`}>
             <h3 className={`text-sm font-mono tracking-wider font-bold uppercase mb-1 ${
               darkMode ? 'text-[#00f0ff]' : 'text-[#006970]'
-            }`}>Dietary Strategy Plan</h3>
-            <h4 className="text-base font-bold mb-4">Precision Recipe Routing</h4>
+            }`}>{t('home.planModal.title')}</h3>
+            <h4 className="text-base font-bold mb-4">{t('home.planModal.subtitle')}</h4>
 
             <p className={`text-xs leading-relaxed mb-4 ${darkMode ? 'text-neutral-300' : 'text-[#3b494b]'}`}>
-              Your nutrition advisory engine generated a high-efficiency nutritional intake model:
+              {t('home.planModal.intro')}
             </p>
 
             <div className={`border rounded p-3 space-y-2 mb-4 text-xs ${
               darkMode ? 'bg-neutral-950 border-neutral-800' : 'bg-white border-[#e5e2e1]'
             }`}>
               <div className={`flex justify-between border-b pb-1.5 ${darkMode ? 'border-neutral-850' : 'border-[#f0edec]'}`}>
-                <span className="font-semibold">Breakfast suggestion:</span>
-                <span className={darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}>Scrambled eggs + Basil</span>
+                <span className="font-semibold">{t('home.planModal.breakfast')}</span>
+                <span className={darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}>{t('home.planModal.breakfastValue')}</span>
               </div>
               <div className={`flex justify-between border-b pb-1.5 ${darkMode ? 'border-neutral-850' : 'border-[#f0edec]'}`}>
-                <span className="font-semibold">Lunch suggestion:</span>
-                <span className={darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}>Spinach & Greek Yogurt salad</span>
+                <span className="font-semibold">{t('home.planModal.lunch')}</span>
+                <span className={darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}>{t('home.planModal.lunchValue')}</span>
               </div>
               <div className="flex justify-between">
-                <span className="font-semibold">Active nutrients targeted:</span>
-                <span className={`font-semibold ${darkMode ? 'text-[#00f0ff]' : 'text-[#006970]'}`}>Protein, Iron, Vitamin K</span>
+                <span className="font-semibold">{t('home.planModal.nutrients')}</span>
+                <span className={`font-semibold ${darkMode ? 'text-[#00f0ff]' : 'text-[#006970]'}`}>{t('home.planModal.nutrientsValue')}</span>
               </div>
             </div>
 
             <p className={`text-[11px] leading-relaxed italic mb-4 ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
-              *By prioritizing ingredients with high spoilage risks (Spinach & Basil), you save $4.20 this week and reduce carbon waste footprints.
+              {t('home.planModal.footnote')}
             </p>
 
             <button
@@ -416,7 +418,7 @@ export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, o
                 darkMode ? 'bg-[#00f0ff] text-black hover:bg-[#00dbe9]' : 'bg-[#1c1b1b] text-[#fcf9f8] hover:bg-black'
               }`}
             >
-              CLOSE PLAN
+              {t('home.planModal.close')}
             </button>
           </div>
         </div>

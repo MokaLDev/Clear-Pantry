@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Ingredient, RefillRecord } from '../types';
+import { Ingredient } from '../types';
 import { Cpu, Camera, Plus, Check, RefreshCw, Layers } from 'lucide-react';
+import { useI18n } from '../i18n';
 
 interface AnalyzeScreenProps {
   ingredients: Ingredient[];
@@ -12,28 +13,29 @@ export default function AnalyzeScreen({ ingredients, onShootRecord, isDemo = fal
   const [shutterFlash, setShutterFlash] = useState(false);
   const [scenario, setScenario] = useState<'standard' | 'depleted' | 'refilled'>('standard');
   const [hasRecorded, setHasRecorded] = useState(false);
+  const { t } = useI18n();
 
   // Scenarios determine what the simulated AI camera is currently "seeing"
   const getSimulatedDetections = () => {
     switch (scenario) {
       case 'depleted':
         return [
-          { id: 'olive-oil', name: 'Olive Oil', percentage: 10, label: 'OLIVE OIL - 10% REMAINING (CRITICAL)', addedQty: '+50ml (Manual Adjustment)' },
-          { id: 'fresh-basil', name: 'Fresh Basil', percentage: 5, label: 'FRESH BASIL - 5% (CRITICAL)', addedQty: '+10g (Depleted Stock)' },
-          { id: 'walnuts', name: 'Walnuts', percentage: 12, label: 'WALNUTS - 12% (CRITICAL)', addedQty: '+20g' }
+          { id: 'olive-oil', name: t('ingredients.oliveOil'), percentage: 10, label: t('analyze.demoLabels.oliveOilCritical'), addedQty: t('analyze.demoQty.oliveOilManual') },
+          { id: 'fresh-basil', name: t('ingredients.freshBasil'), percentage: 5, label: t('analyze.demoLabels.basilCritical'), addedQty: t('analyze.demoQty.basilDepleted') },
+          { id: 'walnuts', name: t('ingredients.walnuts'), percentage: 12, label: t('analyze.demoLabels.walnutsCritical'), addedQty: t('analyze.demoQty.walnutsSmall') }
         ];
       case 'refilled':
         return [
-          { id: 'olive-oil', name: 'Olive Oil', percentage: 95, label: 'OLIVE OIL - 95% CAPACITY (FULL)', addedQty: '+650ml' },
-          { id: 'fresh-basil', name: 'Fresh Basil', percentage: 100, label: 'FRESH BASIL - 100% (REFILLED)', addedQty: '+60g' },
-          { id: 'walnuts', name: 'Walnuts', percentage: 90, label: 'WALNUTS - 90% (REFILLED)', addedQty: '+200g' }
+          { id: 'olive-oil', name: t('ingredients.oliveOil'), percentage: 95, label: t('analyze.demoLabels.oliveOilFull'), addedQty: t('analyze.demoQty.oliveOilRefill') },
+          { id: 'fresh-basil', name: t('ingredients.freshBasil'), percentage: 100, label: t('analyze.demoLabels.basilRefilled'), addedQty: t('analyze.demoQty.basilRefill') },
+          { id: 'walnuts', name: t('ingredients.walnuts'), percentage: 90, label: t('analyze.demoLabels.walnutsRefilled'), addedQty: t('analyze.demoQty.walnutsRefill') }
         ];
       case 'standard':
       default:
         return [
-          { id: 'olive-oil', name: 'Olive Oil', percentage: 30, label: 'OLIVE OIL - 30% REMAINING', addedQty: '+150ml' },
-          { id: 'fresh-basil', name: 'Fresh Basil', percentage: 40, label: 'FRESH BASIL - 40% STABLE', addedQty: '+40g' },
-          { id: 'walnuts', name: 'Walnuts', percentage: 50, label: 'WALNUTS - 50% STABLE', addedQty: '+120g' }
+          { id: 'olive-oil', name: t('ingredients.oliveOil'), percentage: 30, label: t('analyze.demoLabels.oliveOilRemaining'), addedQty: t('analyze.demoQty.oliveOilStandard') },
+          { id: 'fresh-basil', name: t('ingredients.freshBasil'), percentage: 40, label: t('analyze.demoLabels.basilStable'), addedQty: t('analyze.demoQty.basilStandard') },
+          { id: 'walnuts', name: t('ingredients.walnuts'), percentage: 50, label: t('analyze.demoLabels.walnutsStable'), addedQty: t('analyze.demoQty.walnutsStandard') }
         ];
     }
   };
@@ -77,7 +79,7 @@ export default function AnalyzeScreen({ ingredients, onShootRecord, isDemo = fal
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00f0ff] opacity-75"></span>
               <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#00f0ff]"></span>
             </span>
-            <span className="text-xs font-mono font-bold tracking-widest text-[#00f0ff]">AI ACTIVE</span>
+            <span className="text-xs font-mono font-bold tracking-widest text-[#00f0ff]">{t('analyze.aiActive')}</span>
           </div>
         </div>
 
@@ -86,8 +88,8 @@ export default function AnalyzeScreen({ ingredients, onShootRecord, isDemo = fal
           <div className="absolute inset-0 z-0 bg-[#0d0d0d] flex items-center justify-center overflow-hidden">
             <div className="text-center select-none pointer-events-none opacity-20 flex flex-col items-center">
               <Camera size={40} className="text-neutral-600 mb-2" />
-              <span className="text-xs font-mono tracking-widest">CAMERA PREVIEW FEED [LIVE]</span>
-              <span className="text-[9px] font-mono mt-1 text-neutral-500">1080P • COLD ACCURACY</span>
+              <span className="text-xs font-mono tracking-widest">{t('analyze.cameraFeed')}</span>
+              <span className="text-[9px] font-mono mt-1 text-neutral-500">{t('analyze.cameraQuality')}</span>
             </div>
 
             {shutterFlash && (
@@ -100,7 +102,7 @@ export default function AnalyzeScreen({ ingredients, onShootRecord, isDemo = fal
             {hasRecorded && (
               <div className="bg-[#00f0ff]/15 border border-[#00f0ff]/40 px-4 py-2 text-[#00f0ff] font-mono text-[10px] tracking-wider rounded uppercase animate-bounce-short flex items-center gap-1.5 shadow-lg backdrop-blur-md">
                 <Check size={12} />
-                SCAN CAPTURED • AI LABELING COMING SOON
+                {t('analyze.scanCaptured')}
               </div>
             )}
 
@@ -108,7 +110,7 @@ export default function AnalyzeScreen({ ingredients, onShootRecord, isDemo = fal
               <button
                 onClick={handleNonDemoShoot}
                 className="w-14 h-14 bg-[#fcf9f8] text-black hover:bg-white active:scale-90 transition-all rounded-full flex items-center justify-center shadow-2xl border-4 border-neutral-800"
-                title="Capture scan"
+                title={t('analyze.captureScan')}
               >
                 <Camera size={22} className="text-black" />
               </button>
@@ -129,7 +131,7 @@ export default function AnalyzeScreen({ ingredients, onShootRecord, isDemo = fal
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00f0ff] opacity-75"></span>
             <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#00f0ff]"></span>
           </span>
-          <span className="text-xs font-mono font-bold tracking-widest text-[#00f0ff]">AI ACTIVE</span>
+          <span className="text-xs font-mono font-bold tracking-widest text-[#00f0ff]">{t('analyze.aiActive')}</span>
         </div>
 
         {/* Floating Scenario Switcher (to show AI capability off) */}
@@ -140,9 +142,9 @@ export default function AnalyzeScreen({ ingredients, onShootRecord, isDemo = fal
             onChange={(e) => setScenario(e.target.value as any)}
             className="bg-transparent text-[10px] font-mono font-semibold text-[#fcf9f8] focus:outline-none cursor-pointer"
           >
-            <option value="standard" className="bg-neutral-900">Feed: Standard</option>
-            <option value="depleted" className="bg-neutral-900">Feed: Low Stock</option>
-            <option value="refilled" className="bg-neutral-900">Feed: Full restocked</option>
+            <option value="standard" className="bg-neutral-900">{t('analyze.scenarios.standard')}</option>
+            <option value="depleted" className="bg-neutral-900">{t('analyze.scenarios.depleted')}</option>
+            <option value="refilled" className="bg-neutral-900">{t('analyze.scenarios.refilled')}</option>
           </select>
         </div>
       </div>
@@ -153,27 +155,27 @@ export default function AnalyzeScreen({ ingredients, onShootRecord, isDemo = fal
         <div className="space-y-2 max-w-xs ml-auto z-10">
           {/* KITCHEN STATS */}
           <div className="bg-neutral-900/80 border border-neutral-800 p-3 rounded shadow-lg backdrop-blur-sm">
-            <span className="text-[9px] font-mono text-[#6a7a7b] tracking-wider block uppercase">Kitchen Stats</span>
+            <span className="text-[9px] font-mono text-[#6a7a7b] tracking-wider block uppercase">{t('analyze.kitchenStats')}</span>
             <div className="flex justify-between items-baseline mt-1">
               <span className="text-2xl font-bold font-sans">24</span>
-              <span className="text-[9px] font-mono text-[#00f0ff] tracking-widest font-semibold">ITEMS TRACKED</span>
+              <span className="text-[9px] font-mono text-[#00f0ff] tracking-widest font-semibold">{t('analyze.itemsTracked')}</span>
             </div>
             <div className="flex justify-between text-[9px] font-mono text-neutral-400 mt-2 border-t border-neutral-800 pt-1.5">
-              <span>LATENCY: 12ms</span>
-              <span>CONFIDENCE: 99.2%</span>
+              <span>{t('analyze.latency')}</span>
+              <span>{t('analyze.confidence')}</span>
             </div>
           </div>
 
           {/* ACTIVE RECIPE */}
           <div className="bg-neutral-900/80 border border-neutral-800 p-3 rounded shadow-lg backdrop-blur-sm">
-            <span className="text-[9px] font-mono text-[#6a7a7b] tracking-wider block uppercase">Active Recipe</span>
-            <h4 className="text-sm font-bold text-white mt-1 font-sans">Mushroom Risotto</h4>
+            <span className="text-[9px] font-mono text-[#6a7a7b] tracking-wider block uppercase">{t('analyze.activeRecipe')}</span>
+            <h4 className="text-sm font-bold text-white mt-1 font-sans">{t('analyze.recipeName')}</h4>
             <div className="flex gap-1.5 mt-2.5">
               <span className="text-[8px] font-mono bg-[#00f0ff]/10 text-[#00f0ff] border border-[#00f0ff]/20 px-1.5 py-0.5 rounded font-bold uppercase">
-                RICE FOUND
+                {t('analyze.riceFound')}
               </span>
               <span className="text-[8px] font-mono bg-[#00f0ff]/10 text-[#00f0ff] border border-[#00f0ff]/20 px-1.5 py-0.5 rounded font-bold uppercase">
-                OIL FOUND
+                {t('analyze.oilFound')}
               </span>
             </div>
           </div>
@@ -184,8 +186,8 @@ export default function AnalyzeScreen({ ingredients, onShootRecord, isDemo = fal
           {/* Camera locked label in background */}
           <div className="text-center select-none pointer-events-none opacity-20 flex flex-col items-center">
             <Camera size={40} className="text-neutral-600 mb-2" />
-            <span className="text-xs font-mono tracking-widest">CAMERA PREVIEW FEED [LIVE]</span>
-            <span className="text-[9px] font-mono mt-1 text-neutral-500">1080P • COLD ACCURACY</span>
+            <span className="text-xs font-mono tracking-widest">{t('analyze.cameraFeed')}</span>
+            <span className="text-[9px] font-mono mt-1 text-neutral-500">{t('analyze.cameraQuality')}</span>
           </div>
 
           {/* Shutter flash overlay */}
@@ -233,20 +235,20 @@ export default function AnalyzeScreen({ ingredients, onShootRecord, isDemo = fal
           {hasRecorded && (
             <div className="bg-[#00f0ff]/15 border border-[#00f0ff]/40 px-4 py-2 text-[#00f0ff] font-mono text-[10px] tracking-wider rounded uppercase animate-bounce-short flex items-center gap-1.5 shadow-lg backdrop-blur-md">
               <Check size={12} />
-              KITCHEN STATE COMMITTED TO CLOUD & PERSISTENCE
+              {t('analyze.committed')}
             </div>
           )}
 
           <div className="flex items-center justify-between w-full max-w-xs px-2">
             <div className="text-[10px] font-mono text-[#6a7a7b] leading-tight max-w-[120px]">
-              Tap "SHOOT" to snapshot and log current level changes.
+              {t('analyze.shootHint')}
             </div>
 
             {/* Big Shoot Button (Moved slightly upwards as requested) */}
             <button
               onClick={handleShoot}
               className="w-14 h-14 bg-[#fcf9f8] text-black hover:bg-white active:scale-90 transition-all rounded-full flex items-center justify-center shadow-2xl border-4 border-neutral-800"
-              title="Record current levels"
+              title={t('analyze.recordLevels')}
             >
               <Camera size={22} className="text-black" />
             </button>
@@ -257,7 +259,7 @@ export default function AnalyzeScreen({ ingredients, onShootRecord, isDemo = fal
                 setScenario(prev => prev === 'standard' ? 'depleted' : prev === 'depleted' ? 'refilled' : 'standard');
               }}
               className="p-2.5 bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 active:scale-95 text-[#fcf9f8] transition-all rounded"
-              title="Cycle Simulated Target Ingredients"
+              title={t('analyze.cycleTargets')}
             >
               <RefreshCw size={14} className="animate-spin-slow" />
             </button>
