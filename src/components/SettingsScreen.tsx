@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
-import { UserConfig } from '../types';
-import { Check, Settings2, Sliders, Globe, ShieldCheck, Terminal } from 'lucide-react';
+import { UserConfig, User } from '../types';
+import { Check, Globe, Terminal, User as UserIcon, LogOut } from 'lucide-react';
 
 interface SettingsScreenProps {
   config: UserConfig;
+  user: User | null;
   onUpdateConfig: (newConfig: Partial<UserConfig>) => void;
   onResetData: () => void;
+  onLogout: () => void;
 }
 
-export default function SettingsScreen({ config, onUpdateConfig, onResetData }: SettingsScreenProps) {
+export default function SettingsScreen({ config, user, onUpdateConfig, onResetData, onLogout }: SettingsScreenProps) {
   const [logicInput, setLogicInput] = useState(config.reportGenerationLogic);
   const [successMsg, setSuccessMsg] = useState(false);
 
@@ -32,6 +34,45 @@ export default function SettingsScreen({ config, onUpdateConfig, onResetData }: 
       </div>
 
       <div className="px-6 space-y-5 max-w-xl mx-auto w-full">
+        {/* PERSONAL CENTER */}
+        <div className={`border rounded-lg p-5 shadow-sm transition-colors duration-300 ${
+          config.darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-[#e5e2e1]'
+        }`}>
+          <div className="flex items-center gap-4">
+            <div className={`w-14 h-14 rounded-full flex items-center justify-center border-2 ${
+              config.darkMode ? 'bg-neutral-950 border-[#00f0ff] text-[#00f0ff]' : 'bg-[#f0f9fa] border-[#006970] text-[#006970]'
+            }`}>
+              <UserIcon size={24} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-bold truncate">{user?.username || 'Guest'}</h3>
+              <p className={`text-[11px] truncate ${config.darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
+                {user?.info || 'Personal kitchen account'}
+              </p>
+            </div>
+          </div>
+
+          <div className={`mt-4 pt-4 border-t ${
+            config.darkMode ? 'border-neutral-800' : 'border-[#f0edec]'
+          }`}>
+            <button
+              onClick={() => {
+                if (window.confirm('Log out of your account?')) {
+                  onLogout();
+                }
+              }}
+              className={`w-full py-2.5 rounded text-[11px] font-mono font-bold tracking-wider flex items-center justify-center gap-2 transition-colors ${
+                config.darkMode
+                  ? 'bg-neutral-950 hover:bg-red-950/20 border border-red-900/30 text-red-400'
+                  : 'bg-white hover:bg-[#ffdad6]/20 border border-[#ba1a1a]/30 hover:border-[#ba1a1a] text-[#ba1a1a]'
+              }`}
+            >
+              <LogOut size={14} />
+              LOG OUT
+            </button>
+          </div>
+        </div>
+
         {/* APPEARANCE SECTION */}
         <div className={`border rounded p-5 shadow-sm transition-colors duration-300 ${
           config.darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-[#e5e2e1]'

@@ -1,67 +1,94 @@
-import React, { useState, useEffect } from 'react';
-import { Ingredient, RefillRecord, UserConfig } from './types';
+import React, { useEffect, useRef, useState } from 'react';
+import { UserConfig, User, KitchenData } from './types';
 import { INITIAL_INGREDIENTS, INITIAL_REFILLS, DIETARY_ADVICE_POOL } from './data/defaultIngredients';
 import WelcomeScreen from './components/WelcomeScreen';
+import LoginScreen from './components/LoginScreen';
 import HomeScreen from './components/HomeScreen';
 import AnalyzeScreen from './components/AnalyzeScreen';
 import InventoryScreen from './components/InventoryScreen';
 import SettingsScreen from './components/SettingsScreen';
-import { Home, Camera, LayoutGrid, Settings, AlertCircle, RefreshCw } from 'lucide-react';
+import { Home, Camera, LayoutGrid, Settings } from 'lucide-react';
+
+const DEMO_USER_ID = 'user-001';
+
+const DEFAULT_KITCHEN: KitchenData = {
+  ingredients: [],
+  refills: [],
+  config: {
+    darkMode: false,
+    language: 'English (US)',
+    reportGenerationLogic: 'Prioritize high-protein ingredients and list expiration dates in DD/MM/YYYY format...'
+  }
+};
 
 export default function App() {
-  const [started, setStarted] = useState<boolean>(() => {
-    return localStorage.getItem('clearpantry_started') === 'true';
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const saved = localStorage.getItem('clearpantry_current_user');
+    return saved ? JSON.parse(saved) : null;
   });
 
   const [currentTab, setCurrentTab] = useState<string>(() => {
     return localStorage.getItem('clearpantry_tab') || 'home';
   });
 
-  const [ingredients, setIngredients] = useState<Ingredient[]>(() => {
-    const saved = localStorage.getItem('clearpantry_ingredients');
-    return saved ? JSON.parse(saved) : INITIAL_INGREDIENTS;
-  });
+  const [account, setAccount] = useState<{ user: User; kitchen: KitchenData; seenWelcome: boolean } | null>(null);
+  const [loadingAccount, setLoadingAccount] = useState(false);
+  const initialSaveSkipped = useRef(false);
 
-  const [refills, setRefills] = useState<RefillRecord[]>(() => {
-    const saved = localStorage.getItem('clearpantry_refills');
-    return saved ? JSON.parse(saved) : INITIAL_REFILLS;
-  });
-
-  const [config, setConfig] = useState<UserConfig>(() => {
-    const saved = localStorage.getItem('clearpantry_config');
-    if (saved) {
-      return JSON.parse(saved);
-    }
-    return {
-      darkMode: false,
-      language: 'English (US)',
-      reportGenerationLogic: 'Prioritize high-protein ingredients and list expiration dates in DD/MM/YYYY format...'
-    };
-  });
+  const ingredients = account?.kitchen.ingredients ?? [];
+  const refills = account?.kitchen.refills ?? [];
+  const config = account?.kitchen.config ?? DEFAULT_KITCHEN.config;
 
   const [dietAdvice, setDietAdvice] = useState<string>(DIETARY_ADVICE_POOL[0]);
 
-  // Synchronize localStorage
+  // Persist current user & tab to localStorage.
   useEffect(() => {
-    localStorage.setItem('clearpantry_started', String(started));
-  }, [started]);
+    if (currentUser) {
+      localStorage.setItem('clearpantry_current_user', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('clearpantry_current_user');
+    }
+  }, [currentUser]);
 
   useEffect(() => {
     localStorage.setItem('clearpantry_tab', currentTab);
   }, [currentTab]);
 
+  // Load account kitchen data when user logs in / refreshes.
   useEffect(() => {
-    localStorage.setItem('clearpantry_ingredients', JSON.stringify(ingredients));
-  }, [ingredients]);
+    if (!currentUser) {
+      setAccount(null);
+      return;
+    }
 
-  useEffect(() => {
-    localStorage.setItem('clearpantry_refills', JSON.stringify(refills));
-  }, [refills]);
+    let cancelled = false;
+    setLoadingAccount(true);
+    fetch(`/api/account/${currentUser.id}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (data.success) {
+          setAccount({
+            user: currentUser,
+            kitchen: data.kitchen,
+            seenWelcome: data.seenWelcome
+          });
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) console.error('Failed to load account', err);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingAccount(false);
+      });
 
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser]);
+
+  // Derive dietary advice from config.
   useEffect(() => {
-    localStorage.setItem('clearpantry_config', JSON.stringify(config));
-    
-    // Dynamically adjust dietary advice based on Report Generation Logic!
     const query = config.reportGenerationLogic.toLowerCase();
     if (query.includes('protein') || query.includes('high-protein')) {
       setDietAdvice("Protein priority requested: Consume Organic Eggs (50% remaining) and Greek Yogurt to fulfill your daily muscle-recovery requirements.");
@@ -74,101 +101,136 @@ export default function App() {
     } else {
       setDietAdvice(DIETARY_ADVICE_POOL[Math.floor(Math.random() * DIETARY_ADVICE_POOL.length)]);
     }
-  }, [config]);
+  }, [config.reportGenerationLogic]);
+
+  // Persist kitchen changes to the server (except for the demo account).
+  useEffect(() => {
+    if (!account) return;
+    if (!initialSaveSkipped.current) {
+      initialSaveSkipped.current = true;
+      return;
+    }
+    if (account.user.id === DEMO_USER_ID) return;
+
+    fetch(`/api/account/${account.user.id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kitchen: account.kitchen })
+    }).catch((err) => console.error('Failed to save kitchen', err));
+  }, [account?.kitchen]);
+
+  const updateKitchen = (updater: (prev: KitchenData) => KitchenData) => {
+    setAccount((prev) => {
+      if (!prev) return null;
+      return { ...prev, kitchen: updater(prev.kitchen) };
+    });
+  };
 
   // Handler: When user clicks "SHOOT" on Analyze page
   const handleShootRecord = (detectedUpdates: { id: string; percentage: number; addedQty: string }[]) => {
-    // 1. Update ingredient quantities & status
-    setIngredients(prev => {
-      return prev.map(item => {
-        const update = detectedUpdates.find(u => u.id === item.id);
-        if (update) {
-          const newQty = Math.round((update.percentage / 100) * item.maxQty);
-          let newStatus: 'critical' | 'stable' | 'normal' = 'stable';
-          if (update.percentage <= 20) {
-            newStatus = 'critical';
-          } else if (update.percentage >= 80) {
-            newStatus = 'normal';
-          }
-          return {
-            ...item,
-            currentQty: newQty,
-            percentage: update.percentage,
-            status: newStatus,
-            lastUpdated: new Date().toISOString()
-          };
-        }
-        return item;
+    updateKitchen((prev) => {
+      const updatedIngredients = prev.ingredients.map((item) => {
+        const update = detectedUpdates.find((u) => u.id === item.id);
+        if (!update) return item;
+        const newQty = Math.round((update.percentage / 100) * item.maxQty);
+        let newStatus: 'critical' | 'stable' | 'normal' = 'stable';
+        if (update.percentage <= 20) newStatus = 'critical';
+        else if (update.percentage >= 80) newStatus = 'normal';
+        return {
+          ...item,
+          currentQty: newQty,
+          percentage: update.percentage,
+          status: newStatus,
+          lastUpdated: new Date().toISOString()
+        };
       });
-    });
 
-    // 2. Prep prepended refill logs for the detected ones
-    const newRefills: RefillRecord[] = detectedUpdates.map((update, idx) => {
-      const ingredient = ingredients.find(i => i.id === update.id);
-      const name = ingredient ? ingredient.name : update.id;
+      const newRefills = detectedUpdates.map((update, idx) => {
+        const ingredient = prev.ingredients.find((i) => i.id === update.id);
+        const name = ingredient ? ingredient.name : update.id;
+        return {
+          id: `refill-cam-${Date.now()}-${idx}`,
+          ingredientName: name,
+          qtyAdded: update.addedQty,
+          method: 'OPTICAL AI' as const,
+          confidence: Math.round(92 + Math.random() * 7),
+          timestamp: 'Just shot'
+        };
+      });
+
       return {
-        id: `refill-cam-${Date.now()}-${idx}`,
-        ingredientName: name,
-        qtyAdded: update.addedQty,
-        method: 'OPTICAL AI',
-        confidence: Math.round(92 + Math.random() * 7), // 92% to 99%
-        timestamp: 'Just shot'
+        ...prev,
+        ingredients: updatedIngredients,
+        refills: [...newRefills, ...prev.refills]
       };
     });
-
-    setRefills(prev => [...newRefills, ...prev]);
   };
 
   // Handler: Delete a refill log entry
   const handleDeleteRefill = (id: string) => {
-    setRefills(prev => prev.filter(r => r.id !== id));
+    updateKitchen((prev) => ({
+      ...prev,
+      refills: prev.refills.filter((r) => r.id !== id)
+    }));
   };
 
   // Handler: Manual restock logging from Dashboard
   const handleManualRefill = (name: string, qty: string) => {
-    // Attempt to match named ingredient
-    const match = ingredients.find(i => i.name.toLowerCase() === name.toLowerCase());
-    if (match) {
-      setIngredients(prev => {
-        return prev.map(item => {
-          if (item.id === match.id) {
-            return {
-              ...item,
-              percentage: 100,
-              currentQty: item.maxQty,
-              status: 'normal',
-              lastUpdated: new Date().toISOString()
-            };
-          }
-          return item;
-        });
-      });
-    }
+    updateKitchen((prev) => {
+      const match = prev.ingredients.find((i) => i.name.toLowerCase() === name.toLowerCase());
+      const updatedIngredients = match
+        ? prev.ingredients.map((item) =>
+            item.id === match.id
+              ? {
+                  ...item,
+                  percentage: 100,
+                  currentQty: item.maxQty,
+                  status: 'normal' as const,
+                  lastUpdated: new Date().toISOString()
+                }
+              : item
+          )
+        : prev.ingredients;
 
-    const newRecord: RefillRecord = {
-      id: `refill-manual-${Date.now()}`,
-      ingredientName: name,
-      qtyAdded: qty.startsWith('+') ? qty : `+${qty}`,
-      method: 'MANUAL',
-      confidence: 100,
-      timestamp: 'Just now'
-    };
+      const newRecord = {
+        id: `refill-manual-${Date.now()}`,
+        ingredientName: name,
+        qtyAdded: qty.startsWith('+') ? qty : `+${qty}`,
+        method: 'MANUAL' as const,
+        confidence: 100,
+        timestamp: 'Just now'
+      };
 
-    setRefills(prev => [newRecord, ...prev]);
+      return {
+        ...prev,
+        ingredients: updatedIngredients,
+        refills: [newRecord, ...prev.refills]
+      };
+    });
   };
 
-  // Reset demo data helper
+  // Reset kitchen to the canonical example data.
+  // For non-demo accounts this persists; for demo it only lasts the session.
   const handleResetData = () => {
-    setIngredients(INITIAL_INGREDIENTS);
-    setRefills(INITIAL_REFILLS);
-    setConfig({
-      darkMode: false,
-      language: 'English (US)',
-      reportGenerationLogic: 'Prioritize high-protein ingredients and list expiration dates in DD/MM/YYYY format...'
-    });
-    localStorage.removeItem('clearpantry_ingredients');
-    localStorage.removeItem('clearpantry_refills');
-    localStorage.removeItem('clearpantry_config');
+    updateKitchen((prev) => ({
+      ...prev,
+      ingredients: INITIAL_INGREDIENTS,
+      refills: INITIAL_REFILLS,
+      config: DEFAULT_KITCHEN.config
+    }));
+  };
+
+  const handleLogin = (user: User) => {
+    setCurrentUser(user);
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setAccount(null);
+    setCurrentTab('home');
+    initialSaveSkipped.current = false;
+    localStorage.removeItem('clearpantry_current_user');
+    localStorage.removeItem('clearpantry_tab');
   };
 
   const handleRefreshAdvice = () => {
@@ -176,28 +238,34 @@ export default function App() {
   };
 
   const handleUpdateConfig = (newConfig: Partial<UserConfig>) => {
-    setConfig(prev => ({ ...prev, ...newConfig }));
+    updateKitchen((prev) => ({
+      ...prev,
+      config: { ...prev.config, ...newConfig }
+    }));
   };
 
-  // Tab styling helper based on nav-bar background contrast requirements
+  const handleStart = async () => {
+    if (!account) return;
+    await fetch(`/api/account/${account.user.id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ seenWelcome: true })
+    });
+    setAccount((prev) => (prev ? { ...prev, seenWelcome: true } : null));
+  };
+
   const getTabButtonClass = (tab: string) => {
     const isActive = currentTab === tab;
     const isNavBarDark = config.darkMode || currentTab === 'analyze';
 
     if (isActive) {
-      if (isNavBarDark) {
-        return 'text-[#00f0ff] scale-110 font-bold';
-      }
-      return 'text-[#006970] scale-110 font-bold';
-    } else {
-      if (isNavBarDark) {
-        return 'text-neutral-400 hover:text-white transition-colors duration-200';
-      }
-      return 'text-[#6a7a7b] hover:text-[#1c1b1b] transition-colors duration-200';
+      return isNavBarDark ? 'text-[#00f0ff] scale-110 font-bold' : 'text-[#006970] scale-110 font-bold';
     }
+    return isNavBarDark
+      ? 'text-neutral-400 hover:text-white transition-colors duration-200'
+      : 'text-[#6a7a7b] hover:text-[#1c1b1b] transition-colors duration-200';
   };
 
-  // Render correct tab view
   const renderTabContent = () => {
     switch (currentTab) {
       case 'home':
@@ -231,46 +299,53 @@ export default function App() {
         return (
           <SettingsScreen
             config={config}
+            user={currentUser}
             onUpdateConfig={handleUpdateConfig}
             onResetData={handleResetData}
+            onLogout={handleLogout}
           />
         );
       default:
-        return <HomeScreen ingredients={ingredients} dietAdvice={dietAdvice} onRefreshAdvice={handleRefreshAdvice} onNavigateToTab={setCurrentTab} darkMode={config.darkMode} />;
+        return (
+          <HomeScreen
+            ingredients={ingredients}
+            dietAdvice={dietAdvice}
+            onRefreshAdvice={handleRefreshAdvice}
+            onNavigateToTab={setCurrentTab}
+            darkMode={config.darkMode}
+          />
+        );
     }
   };
 
-  // Fluid responsive layout that stretches and adapts across all sizes
   return (
     <div className={`h-screen w-full flex flex-col overflow-hidden transition-colors duration-300 ${
       config.darkMode ? 'bg-[#121212] text-white' : 'bg-[#fcf9f8] text-[#1c1b1b]'
     }`}>
-      
-      {/* Dynamic Content Container */}
       <div className="flex-1 w-full max-w-5xl mx-auto flex flex-col overflow-hidden relative">
-        
-        {/* Content canvas switcher */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {!started ? (
-            <WelcomeScreen onStart={() => setStarted(true)} />
+          {!currentUser ? (
+            <LoginScreen onLogin={handleLogin} />
+          ) : loadingAccount || !account ? (
+            <div className="flex-1 flex flex-col items-center justify-center font-sans">
+              <div className="w-8 h-8 border-2 border-[#006970] border-t-transparent rounded-full animate-spin" />
+              <p className="text-xs text-[#6a7a7b] mt-3 font-mono">LOADING KITCHEN DATA</p>
+            </div>
+          ) : !account.seenWelcome ? (
+            <WelcomeScreen onStart={handleStart} />
           ) : (
             <div className="flex-1 flex flex-col overflow-hidden relative">
-              
-              {/* Active Sub-tab Viewport */}
               <div className="flex-1 flex flex-col overflow-hidden">
                 {renderTabContent()}
               </div>
 
-              {/* Elegant Bottom Tab Navigation (Floating dock style) */}
               <div className={`h-20 border-t flex justify-around items-center px-4 transition-all duration-700 shrink-0 ${
-                config.darkMode 
-                  ? 'bg-neutral-900/95 border-neutral-800 text-neutral-400' 
-                  : (currentTab === 'analyze' 
-                      ? 'bg-neutral-950/95 border-neutral-900 text-neutral-400' 
+                config.darkMode
+                  ? 'bg-neutral-900/95 border-neutral-800 text-neutral-400'
+                  : (currentTab === 'analyze'
+                      ? 'bg-neutral-950/95 border-neutral-900 text-neutral-400'
                       : 'bg-white/95 border-[#e5e2e1] text-[#3b494b]')
               } backdrop-blur-md pb-4`}>
-                
-                {/* Tab: Home */}
                 <button
                   id="tab-home"
                   onClick={() => setCurrentTab('home')}
@@ -280,7 +355,6 @@ export default function App() {
                   <span className="text-[10px] font-mono tracking-wider font-semibold">HOME</span>
                 </button>
 
-                {/* Tab: Analyze */}
                 <button
                   id="tab-analyze"
                   onClick={() => setCurrentTab('analyze')}
@@ -290,7 +364,6 @@ export default function App() {
                   <span className="text-[10px] font-mono tracking-wider font-semibold">ANALYZE</span>
                 </button>
 
-                {/* Tab: Inventory / Storage */}
                 <button
                   id="tab-inventory"
                   onClick={() => setCurrentTab('inventory')}
@@ -300,7 +373,6 @@ export default function App() {
                   <span className="text-[10px] font-mono tracking-wider font-semibold">PANTRY</span>
                 </button>
 
-                {/* Tab: Settings */}
                 <button
                   id="tab-settings"
                   onClick={() => setCurrentTab('settings')}
@@ -310,11 +382,9 @@ export default function App() {
                   <span className="text-[10px] font-mono tracking-wider font-semibold">SETTINGS</span>
                 </button>
               </div>
-
             </div>
           )}
         </div>
-
       </div>
     </div>
   );

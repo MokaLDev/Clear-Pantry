@@ -35,3 +35,17 @@ export interface UserConfig {
   language: string;
   reportGenerationLogic: string;
 }
+
+export interface User {
+  id: string;
+  username: string;
+  password: string;
+  info: string;
+  seenWelcome: boolean;
+}
+
+export interface KitchenData {
+  ingredients: Ingredient[];
+  refills: RefillRecord[];
+  config: UserConfig;
+}
