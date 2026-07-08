@@ -535,7 +535,7 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
                           darkMode ? 'bg-red-900/80' : 'bg-[#ba1a1a]'
                         }`}
                         style={{
-                          width: `${Math.max(DELETE_WIDTH, -(swipeOffsets[refill.id] || 0))}px`,
+                          width: `${(swipeOffsets[refill.id] || 0) < 0 ? Math.min(-(swipeOffsets[refill.id] || 0), MAX_DRAG) : 0}px`,
                           transition: swipeRef.current?.id === refill.id ? 'none' : 'width 200ms ease-out'
                         }}
                         aria-label="Delete refill"

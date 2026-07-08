@@ -326,7 +326,16 @@
       "seenWelcome": true,
       "kitchen": {
         "ingredients": [],
-        "refills": [],
+        "refills": [
+          {
+            "id": "refill-manual-1783502603258",
+            "ingredientName": "43434",
+            "qtyAdded": "+4343g",
+            "method": "MANUAL",
+            "confidence": 100,
+            "timestamp": "Just now"
+          }
+        ],
         "config": {
           "darkMode": false,
           "language": "English (US)",
