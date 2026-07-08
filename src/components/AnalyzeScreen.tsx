@@ -5,9 +5,10 @@ import { Cpu, Camera, Plus, Check, RefreshCw, Layers } from 'lucide-react';
 interface AnalyzeScreenProps {
   ingredients: Ingredient[];
   onShootRecord: (detectedUpdates: { id: string; percentage: number; addedQty: string }[]) => void;
+  isDemo?: boolean;
 }
 
-export default function AnalyzeScreen({ ingredients, onShootRecord }: AnalyzeScreenProps) {
+export default function AnalyzeScreen({ ingredients, onShootRecord, isDemo = false }: AnalyzeScreenProps) {
   const [shutterFlash, setShutterFlash] = useState(false);
   const [scenario, setScenario] = useState<'standard' | 'depleted' | 'refilled'>('standard');
   const [hasRecorded, setHasRecorded] = useState(false);
@@ -58,6 +59,65 @@ export default function AnalyzeScreen({ ingredients, onShootRecord }: AnalyzeScr
     setHasRecorded(true);
     setTimeout(() => setHasRecorded(false), 3000);
   };
+
+  const handleNonDemoShoot = () => {
+    setShutterFlash(true);
+    setTimeout(() => setShutterFlash(false), 250);
+    setHasRecorded(true);
+    setTimeout(() => setHasRecorded(false), 3000);
+  };
+
+  if (!isDemo) {
+    return (
+      <div className="w-full flex-1 bg-black text-[#fcf9f8] flex flex-col font-sans overflow-hidden select-none pb-20">
+        {/* Top Header */}
+        <div className="p-4 flex justify-between items-center z-10 bg-gradient-to-b from-black/80 to-transparent">
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-3.5 w-3.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00f0ff] opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#00f0ff]"></span>
+            </span>
+            <span className="text-xs font-mono font-bold tracking-widest text-[#00f0ff]">AI ACTIVE</span>
+          </div>
+        </div>
+
+        {/* Camera preview area */}
+        <div className="flex-1 relative flex flex-col p-4 justify-between min-h-[400px]">
+          <div className="absolute inset-0 z-0 bg-[#0d0d0d] flex items-center justify-center overflow-hidden">
+            <div className="text-center select-none pointer-events-none opacity-20 flex flex-col items-center">
+              <Camera size={40} className="text-neutral-600 mb-2" />
+              <span className="text-xs font-mono tracking-widest">CAMERA PREVIEW FEED [LIVE]</span>
+              <span className="text-[9px] font-mono mt-1 text-neutral-500">1080P • COLD ACCURACY</span>
+            </div>
+
+            {shutterFlash && (
+              <div className="absolute inset-0 bg-white z-40 transition-opacity duration-150 animate-flash-shutter" />
+            )}
+          </div>
+
+          {/* Bottom controls */}
+          <div className="z-10 w-full flex flex-col items-center gap-3 mt-auto pb-4">
+            {hasRecorded && (
+              <div className="bg-[#00f0ff]/15 border border-[#00f0ff]/40 px-4 py-2 text-[#00f0ff] font-mono text-[10px] tracking-wider rounded uppercase animate-bounce-short flex items-center gap-1.5 shadow-lg backdrop-blur-md">
+                <Check size={12} />
+                SCAN CAPTURED • AI LABELING COMING SOON
+              </div>
+            )}
+
+            <div className="flex items-center justify-center w-full px-2">
+              <button
+                onClick={handleNonDemoShoot}
+                className="w-14 h-14 bg-[#fcf9f8] text-black hover:bg-white active:scale-90 transition-all rounded-full flex items-center justify-center shadow-2xl border-4 border-neutral-800"
+                title="Capture scan"
+              >
+                <Camera size={22} className="text-black" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full flex-1 bg-black text-[#fcf9f8] flex flex-col font-sans overflow-hidden select-none pb-20">

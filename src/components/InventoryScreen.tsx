@@ -8,9 +8,10 @@ interface InventoryScreenProps {
   onManualRefill: (name: string, qty: string) => void;
   onDeleteRefill: (id: string) => void;
   darkMode: boolean;
+  isDemo?: boolean;
 }
 
-export default function InventoryScreen({ ingredients, refills, onManualRefill, onDeleteRefill, darkMode }: InventoryScreenProps) {
+export default function InventoryScreen({ ingredients, refills, onManualRefill, onDeleteRefill, darkMode, isDemo = false }: InventoryScreenProps) {
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
   const [manualIngredient, setManualIngredient] = useState('');
   const [manualAmount, setManualAmount] = useState('');
@@ -56,10 +57,34 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
   // Spoilage risk items (High risk or critical status)
   const spoilageItems = ingredients.filter(i => i.spoilageRisk === 'High');
 
-  // Chart values (remaining stock levels on days Mon-Sun)
-  const chartPoints = [85, 78, 62, 55, 48, 52, 40]; // primary line
-  const secondaryPoints = [78, 70, 72, 68, 80, 85, 90]; // secondary dotted line
   const days = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+
+  // Derive depletion trend from actual ingredient data.
+  const avgPercentage = ingredients.length
+    ? Math.round(ingredients.reduce((acc, i) => acc + i.percentage, 0) / ingredients.length)
+    : 0;
+  const avgFreshness = ingredients.length
+    ? Math.round(ingredients.reduce((acc, i) => acc + i.freshness, 0) / ingredients.length)
+    : 0;
+
+  const computeTrend = (endValue: number) => {
+    const points: number[] = [];
+    for (let i = 0; i < 7; i++) {
+      const t = i / 6;
+      const base = 100 - (100 - endValue) * t;
+      const noise = Math.sin(i * 1.5) * 3;
+      points.push(Math.max(0, Math.min(100, Math.round(base + noise))));
+    }
+    return points;
+  };
+
+  const primaryPoints = ingredients.length ? computeTrend(avgPercentage) : [];
+  const secondaryPoints = ingredients.length ? computeTrend(avgFreshness) : [];
+
+  const getX = (idx: number) => 10 + (idx * 480) / 6;
+  const getY = (value: number) => 130 - (value / 100) * 110;
+  const buildPath = (points: number[]) =>
+    points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(p)}`).join(' ');
 
   const closeManualForm = () => {
     setManualIngredient('');
@@ -166,76 +191,148 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
               <div className={`flex items-center gap-3 text-[10px] font-mono ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
                 <div className="flex items-center gap-1.5">
                   <span className={`w-2.5 h-0.5 inline-block ${darkMode ? 'bg-[#00f0ff]' : 'bg-[#006970]'}`} />
-                  <span>PROTEIN</span>
+                  <span>{isDemo ? 'PROTEIN' : 'AVG STOCK'}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <span className={`w-2.5 h-0.5 border-t border-dashed inline-block ${darkMode ? 'border-[#a78bfa]' : 'border-[#5400c3]'}`} />
-                  <span>FIBER</span>
+                  <span>{isDemo ? 'FIBER' : 'AVG FRESHNESS'}</span>
                 </div>
               </div>
             </div>
 
-            {/* High fidelity SVG Line Graph */}
+            {/* Depletion trend graph: demo keeps the original hardcoded chart; other accounts use live data or an empty state. */}
             <div className="relative h-44 w-full pt-4">
-              <svg viewBox="0 0 500 150" className="w-full h-full overflow-visible">
-                {/* Grid Lines */}
-                <line x1="0" y1="20" x2="500" y2="20" stroke={darkMode ? '#262626' : '#f0edec'} strokeWidth="1" />
-                <line x1="0" y1="55" x2="500" y2="55" stroke={darkMode ? '#262626' : '#f0edec'} strokeWidth="1" />
-                <line x1="0" y1="90" x2="500" y2="90" stroke={darkMode ? '#262626' : '#f0edec'} strokeWidth="1" />
-                <line x1="0" y1="125" x2="500" y2="125" stroke={darkMode ? '#262626' : '#f0edec'} strokeWidth="1" />
+              {isDemo ? (
+                <svg viewBox="0 0 500 150" className="w-full h-full overflow-visible">
+                  {/* Grid Lines */}
+                  <line x1="0" y1="20" x2="500" y2="20" stroke={darkMode ? '#262626' : '#f0edec'} strokeWidth="1" />
+                  <line x1="0" y1="55" x2="500" y2="55" stroke={darkMode ? '#262626' : '#f0edec'} strokeWidth="1" />
+                  <line x1="0" y1="90" x2="500" y2="90" stroke={darkMode ? '#262626' : '#f0edec'} strokeWidth="1" />
+                  <line x1="0" y1="125" x2="500" y2="125" stroke={darkMode ? '#262626' : '#f0edec'} strokeWidth="1" />
 
-                {/* Secondary line (Dashed Purple) */}
-                <path
-                  d="M 10 100 Q 90 115, 170 85 T 330 65 T 490 55"
-                  fill="none"
-                  stroke={darkMode ? '#a78bfa' : '#5400c3'}
-                  strokeWidth="1.5"
-                  strokeDasharray="4,4"
-                  className="opacity-70"
-                />
+                  {/* Secondary line (Dashed Purple) */}
+                  <path
+                    d="M 10 100 Q 90 115, 170 85 T 330 65 T 490 55"
+                    fill="none"
+                    stroke={darkMode ? '#a78bfa' : '#5400c3'}
+                    strokeWidth="1.5"
+                    strokeDasharray="4,4"
+                    className="opacity-70"
+                  />
 
-                {/* Primary line (Solid Teal) */}
-                <path
-                  d="M 10 70 Q 90 75, 170 95 T 330 110 T 490 120"
-                  fill="none"
-                  stroke={darkMode ? '#00f0ff' : '#006970'}
-                  strokeWidth="2"
-                />
+                  {/* Primary line (Solid Teal) */}
+                  <path
+                    d="M 10 70 Q 90 75, 170 95 T 330 110 T 490 120"
+                    fill="none"
+                    stroke={darkMode ? '#00f0ff' : '#006970'}
+                    strokeWidth="2"
+                  />
 
-                {/* Interactivity Overlay Points */}
-                {days.map((day, idx) => {
-                  const x = 10 + (idx * 480) / 6;
-                  const y = 70 + (idx * 10) - (idx === 2 ? 15 : 0); // approx y coordinates
-                  return (
-                    <g key={day} className="cursor-pointer group" onMouseEnter={() => setSelectedPoint(idx)}>
-                      <circle
-                        cx={x}
-                        cy={y}
-                        r="3"
-                        fill={darkMode ? '#00f0ff' : '#006970'}
-                        className="group-hover:r-5 transition-all"
-                      />
-                      {selectedPoint === idx && (
-                        <g>
-                          <rect x={x - 45} y={y - 30} width="90" height="20" fill="black" rx="2" className="opacity-90" />
-                          <text x={x} y={y - 17} fill="white" fontSize="9" textAnchor="middle" fontFamily="monospace">
-                            {chartPoints[idx]}% REMAINING
-                          </text>
-                        </g>
-                      )}
-                    </g>
-                  );
-                })}
-              </svg>
+                  {/* Interactivity Overlay Points */}
+                  {days.map((day, idx) => {
+                    const x = 10 + (idx * 480) / 6;
+                    const y = 70 + (idx * 10) - (idx === 2 ? 15 : 0);
+                    return (
+                      <g key={day} className="cursor-pointer group" onMouseEnter={() => setSelectedPoint(idx)}>
+                        <circle
+                          cx={x}
+                          cy={y}
+                          r="3"
+                          fill={darkMode ? '#00f0ff' : '#006970'}
+                          className="group-hover:r-5 transition-all"
+                        />
+                        {selectedPoint === idx && (
+                          <g>
+                            <rect x={x - 45} y={y - 30} width="90" height="20" fill="black" rx="2" className="opacity-90" />
+                            <text x={x} y={y - 17} fill="white" fontSize="9" textAnchor="middle" fontFamily="monospace">
+                              {[85, 78, 62, 55, 48, 52, 40][idx]}% REMAINING
+                            </text>
+                          </g>
+                        )}
+                      </g>
+                    );
+                  })}
+                </svg>
+              ) : ingredients.length === 0 ? (
+                <div className={`flex items-center justify-center h-full rounded ${darkMode ? 'bg-neutral-950/50' : 'bg-[#fcf9f8]'}`}>
+                  <span className={`text-[11px] ${darkMode ? 'text-neutral-500' : 'text-[#9ca3af]'}`}>
+                    Add ingredients to see depletion trends
+                  </span>
+                </div>
+              ) : (
+                <svg viewBox="0 0 500 150" className="w-full h-full overflow-visible">
+                  {/* Grid Lines */}
+                  <line x1="0" y1="20" x2="500" y2="20" stroke={darkMode ? '#262626' : '#f0edec'} strokeWidth="1" />
+                  <line x1="0" y1="55" x2="500" y2="55" stroke={darkMode ? '#262626' : '#f0edec'} strokeWidth="1" />
+                  <line x1="0" y1="90" x2="500" y2="90" stroke={darkMode ? '#262626' : '#f0edec'} strokeWidth="1" />
+                  <line x1="0" y1="125" x2="500" y2="125" stroke={darkMode ? '#262626' : '#f0edec'} strokeWidth="1" />
 
-              {/* Floating label exactly matching screenshot */}
-              <div className={`absolute top-[35%] left-[32%] border text-[9px] font-mono font-semibold px-2 py-1 rounded shadow-sm tracking-wider transition-colors duration-300 ${
-                darkMode 
-                  ? 'bg-neutral-950/95 border-neutral-800 text-[#00f0ff]' 
-                  : 'bg-white/95 border-[#b9cacb]/40 text-[#006970]'
-              }`}>
-                PROTEIN - 12% REMAINING
-              </div>
+                  {/* Secondary line (Dashed Purple) */}
+                  {secondaryPoints.length > 0 && (
+                    <path
+                      d={buildPath(secondaryPoints)}
+                      fill="none"
+                      stroke={darkMode ? '#a78bfa' : '#5400c3'}
+                      strokeWidth="1.5"
+                      strokeDasharray="4,4"
+                      className="opacity-70"
+                    />
+                  )}
+
+                  {/* Primary line (Solid Teal) */}
+                  {primaryPoints.length > 0 && (
+                    <path
+                      d={buildPath(primaryPoints)}
+                      fill="none"
+                      stroke={darkMode ? '#00f0ff' : '#006970'}
+                      strokeWidth="2"
+                    />
+                  )}
+
+                  {/* Interactivity Overlay Points */}
+                  {primaryPoints.map((value, idx) => {
+                    const x = getX(idx);
+                    const y = getY(value);
+                    return (
+                      <g key={days[idx]} className="cursor-pointer group" onMouseEnter={() => setSelectedPoint(idx)}>
+                        <circle
+                          cx={x}
+                          cy={y}
+                          r="3"
+                          fill={darkMode ? '#00f0ff' : '#006970'}
+                          className="group-hover:r-5 transition-all"
+                        />
+                        {selectedPoint === idx && (
+                          <g>
+                            <rect x={x - 45} y={y - 30} width="90" height="20" fill="black" rx="2" className="opacity-90" />
+                            <text x={x} y={y - 17} fill="white" fontSize="9" textAnchor="middle" fontFamily="monospace">
+                              {value}% REMAINING
+                            </text>
+                          </g>
+                        )}
+                      </g>
+                    );
+                  })}
+                </svg>
+              )}
+
+              {isDemo ? (
+                <div className={`absolute top-[35%] left-[32%] border text-[9px] font-mono font-semibold px-2 py-1 rounded shadow-sm tracking-wider transition-colors duration-300 ${
+                  darkMode
+                    ? 'bg-neutral-950/95 border-neutral-800 text-[#00f0ff]'
+                    : 'bg-white/95 border-[#b9cacb]/40 text-[#006970]'
+                }`}>
+                  PROTEIN - 12% REMAINING
+                </div>
+              ) : ingredients.length > 0 && (
+                <div className={`absolute top-[35%] left-[32%] border text-[9px] font-mono font-semibold px-2 py-1 rounded shadow-sm tracking-wider transition-colors duration-300 ${
+                  darkMode
+                    ? 'bg-neutral-950/95 border-neutral-800 text-[#00f0ff]'
+                    : 'bg-white/95 border-[#b9cacb]/40 text-[#006970]'
+                }`}>
+                  AVG STOCK - {avgPercentage}% REMAINING
+                </div>
+              )}
             </div>
 
             {/* X Axis Labels */}

@@ -276,6 +276,7 @@ export default function App() {
             onRefreshAdvice={handleRefreshAdvice}
             onNavigateToTab={(tab) => setCurrentTab(tab)}
             darkMode={config.darkMode}
+            isDemo={currentUser?.id === DEMO_USER_ID}
           />
         );
       case 'analyze':
@@ -283,6 +284,7 @@ export default function App() {
           <AnalyzeScreen
             ingredients={ingredients}
             onShootRecord={handleShootRecord}
+            isDemo={currentUser?.id === DEMO_USER_ID}
           />
         );
       case 'inventory':
@@ -293,6 +295,7 @@ export default function App() {
             onManualRefill={handleManualRefill}
             onDeleteRefill={handleDeleteRefill}
             darkMode={config.darkMode}
+            isDemo={currentUser?.id === DEMO_USER_ID}
           />
         );
       case 'settings':
