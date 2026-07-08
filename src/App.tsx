@@ -233,6 +233,16 @@ export default function App() {
     localStorage.removeItem('clearpantry_tab');
   };
 
+  const handleDeleteAccount = async () => {
+    if (!currentUser) return;
+    try {
+      await fetch(`/api/account/${currentUser.id}`, { method: 'DELETE' });
+    } catch (err) {
+      console.error('Failed to delete account', err);
+    }
+    handleLogout();
+  };
+
   const handleRefreshAdvice = () => {
     setDietAdvice(DIETARY_ADVICE_POOL[Math.floor(Math.random() * DIETARY_ADVICE_POOL.length)]);
   };
@@ -306,6 +316,7 @@ export default function App() {
             onUpdateConfig={handleUpdateConfig}
             onResetData={handleResetData}
             onLogout={handleLogout}
+            onDeleteAccount={handleDeleteAccount}
           />
         );
       default:

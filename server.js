@@ -115,6 +115,20 @@ async function createServer() {
     });
   });
 
+  // DELETE account
+  app.delete('/api/account/:userId', async (req, res) => {
+    const data = await readUsers();
+    const index = data.users.findIndex((u) => u.id === req.params.userId);
+    if (index === -1) {
+      res.status(404).json({ success: false, message: 'User not found.' });
+      return;
+    }
+
+    data.users.splice(index, 1);
+    await writeUsers(data);
+    res.json({ success: true });
+  });
+
   // POST account kitchen + welcome state
   // NOTE: kitchen updates are ignored for the demo account so it always resets.
   app.post('/api/account/:userId', async (req, res) => {

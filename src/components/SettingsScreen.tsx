@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { UserConfig, User } from '../types';
-import { Check, Globe, Terminal, User as UserIcon, LogOut } from 'lucide-react';
+import { Check, Globe, Terminal, User as UserIcon, LogOut, Trash2 } from 'lucide-react';
 
 interface SettingsScreenProps {
   config: UserConfig;
@@ -8,9 +8,10 @@ interface SettingsScreenProps {
   onUpdateConfig: (newConfig: Partial<UserConfig>) => void;
   onResetData: () => void;
   onLogout: () => void;
+  onDeleteAccount: () => void;
 }
 
-export default function SettingsScreen({ config, user, onUpdateConfig, onResetData, onLogout }: SettingsScreenProps) {
+export default function SettingsScreen({ config, user, onUpdateConfig, onResetData, onLogout, onDeleteAccount }: SettingsScreenProps) {
   const [logicInput, setLogicInput] = useState(config.reportGenerationLogic);
   const [successMsg, setSuccessMsg] = useState(false);
 
@@ -54,7 +55,7 @@ export default function SettingsScreen({ config, user, onUpdateConfig, onResetDa
 
           <div className={`mt-4 pt-4 border-t ${
             config.darkMode ? 'border-neutral-800' : 'border-[#f0edec]'
-          }`}>
+          } space-y-3`}>
             <button
               onClick={() => {
                 if (window.confirm('Log out of your account?')) {
@@ -69,6 +70,26 @@ export default function SettingsScreen({ config, user, onUpdateConfig, onResetDa
             >
               <LogOut size={14} />
               LOG OUT
+            </button>
+
+            <button
+              onClick={() => {
+                if (user?.username === 'demo') {
+                  alert('The demo account cannot be deleted.');
+                  return;
+                }
+                if (window.confirm(`Delete account "${user?.username}" permanently? This cannot be undone.`)) {
+                  onDeleteAccount();
+                }
+              }}
+              className={`w-full py-2.5 rounded text-[11px] font-mono font-bold tracking-wider flex items-center justify-center gap-2 transition-colors ${
+                config.darkMode
+                  ? 'bg-neutral-950 hover:bg-red-950/20 border border-red-900/30 text-red-400'
+                  : 'bg-white hover:bg-[#ffdad6]/20 border border-[#ba1a1a]/30 hover:border-[#ba1a1a] text-[#ba1a1a]'
+              }`}
+            >
+              <Trash2 size={14} />
+              DELETE ACCOUNT
             </button>
           </div>
         </div>

@@ -319,23 +319,14 @@
       }
     },
     {
-      "id": "user-1783500454969",
+      "id": "user-1783506666850",
       "username": "MokaL",
       "password": "114514",
       "info": "Personal kitchen account",
       "seenWelcome": true,
       "kitchen": {
         "ingredients": [],
-        "refills": [
-          {
-            "id": "refill-manual-1783502603258",
-            "ingredientName": "43434",
-            "qtyAdded": "+4343g",
-            "method": "MANUAL",
-            "confidence": 100,
-            "timestamp": "Just now"
-          }
-        ],
+        "refills": [],
         "config": {
           "darkMode": false,
           "language": "English (US)",
