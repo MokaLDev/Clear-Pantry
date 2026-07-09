@@ -326,9 +326,18 @@
       "seenWelcome": true,
       "kitchen": {
         "ingredients": [],
-        "refills": [],
+        "refills": [
+          {
+            "id": "refill-manual-1783584134453",
+            "ingredientName": "Flour",
+            "qtyAdded": "+123g",
+            "method": "MANUAL",
+            "confidence": 100,
+            "timestamp": "Just now"
+          }
+        ],
         "config": {
-          "darkMode": false,
+          "darkMode": true,
           "language": "en",
           "reportGenerationLogic": "Prioritize high-protein ingredients and list expiration dates in DD/MM/YYYY format..."
         }
