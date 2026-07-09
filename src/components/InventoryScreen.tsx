@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Ingredient, RefillRecord } from '../types';
 import { ArrowUpRight, ShieldAlert, Cpu, Check, HelpCircle, ChevronRight, X, ChevronDown, Trash2 } from 'lucide-react';
 import { useI18n } from '../i18n';
@@ -26,7 +26,39 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
   const MAX_DRAG = DELETE_WIDTH + DELETE_EXTRA * 2; // 176
   const { t } = useI18n();
 
+  const [exitingId, setExitingId] = useState<string | null>(null);
+  const [newIds, setNewIds] = useState<Set<string>>(new Set());
+  const prevRefillsRef = useRef<RefillRecord[]>([]);
+
   const UNITS = ['g', 'kg', 'ml', 'l', 'oz', 'lb', 'pcs', '%'];
+
+  // Animate newly added refill rows
+  useEffect(() => {
+    const prev = prevRefillsRef.current;
+    if (prev.length === 0) {
+      prevRefillsRef.current = refills;
+      return;
+    }
+    const prevIds = new Set(prev.map(r => r.id));
+    const added = refills.filter(r => !prevIds.has(r.id));
+    if (added.length > 0) {
+      setNewIds(current => {
+        const next = new Set(current);
+        added.forEach(r => next.add(r.id));
+        return next;
+      });
+      const timer = setTimeout(() => {
+        setNewIds(current => {
+          const next = new Set(current);
+          added.forEach(r => next.delete(r.id));
+          return next;
+        });
+      }, 500);
+      prevRefillsRef.current = refills;
+      return () => clearTimeout(timer);
+    }
+    prevRefillsRef.current = refills;
+  }, [refills]);
 
   useEffect(() => {
     if (!showManualForm) return;
@@ -150,13 +182,8 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
     let snapped = current;
 
     if (current <= DELETE_TRIGGER) {
-      // Second-stage pull: delete the entry
-      onDeleteRefill(id);
-      setSwipeOffsets(prev => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
+      // Second-stage pull: animate and then delete the entry
+      animateDelete(id);
     } else if (Math.abs(delta) < 5 && startOffset !== 0) {
       // Tap-to-close when already open
       snapped = 0;
@@ -167,6 +194,19 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
       setSwipeOffsets(prev => ({ ...prev, [id]: snapped }));
     }
     swipeRef.current = null;
+  };
+
+  const animateDelete = (id: string) => {
+    setExitingId(id);
+    setSwipeOffsets(prev => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setTimeout(() => {
+      onDeleteRefill(id);
+      setExitingId(prev => (prev === id ? null : prev));
+    }, 300);
   };
 
   const methodLabel = (method: RefillRecord['method']) =>
@@ -541,62 +581,76 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
                 </tr>
               </thead>
               <tbody className={`divide-y transition-colors ${darkMode ? 'divide-neutral-800' : 'divide-[#f0edec]'}`}>
-                {refills.map((refill) => (
-                  <tr key={refill.id}>
-                    <td colSpan={4} className="p-0 relative overflow-hidden">
-                      {/* Delete background */}
-                      <button
-                        onClick={() => onDeleteRefill(refill.id)}
-                        className={`absolute inset-y-0 right-0 flex items-center justify-center text-white ${
-                          darkMode ? 'bg-red-900/80' : 'bg-[#ba1a1a]'
-                        }`}
-                        style={{
-                          width: `${(swipeOffsets[refill.id] || 0) < 0 ? Math.min(-(swipeOffsets[refill.id] || 0), MAX_DRAG) : 0}px`,
-                          transition: swipeRef.current?.id === refill.id ? 'none' : 'width 200ms ease-out'
-                        }}
-                        aria-label={t('inventory.deleteRefill')}
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                {refills.map((refill) => {
+                  const isExiting = exitingId === refill.id;
+                  const isNew = newIds.has(refill.id);
+                  const offset = swipeOffsets[refill.id] || 0;
+                  const bgWidth = offset < 0 ? Math.min(-offset, MAX_DRAG) : 0;
+                  const trashScale = 1 + Math.min(1, bgWidth / MAX_DRAG) * 0.4;
+                  return (
+                    <tr key={refill.id}>
+                      <td colSpan={4} className="p-0">
+                        <div
+                          className={`relative overflow-hidden transition-all duration-300 ease-out origin-top
+                            ${isExiting ? '-translate-x-full scale-y-0 opacity-0' : 'translate-x-0 scale-y-100 opacity-100'}
+                            ${isNew ? 'animate-refill-enter' : ''}
+                          `}
+                        >
+                          {/* Delete background */}
+                          <button
+                            onClick={() => animateDelete(refill.id)}
+                            className={`absolute inset-y-0 right-0 flex items-center justify-center text-white ${
+                              darkMode ? 'bg-red-900/80' : 'bg-[#ba1a1a]'
+                            }`}
+                            style={{
+                              width: `${bgWidth}px`,
+                              transition: swipeRef.current?.id === refill.id ? 'none' : 'width 200ms ease-out'
+                            }}
+                            aria-label={t('inventory.deleteRefill')}
+                          >
+                            <Trash2 size={18} style={{ transform: `scale(${trashScale})` }} className="transition-transform duration-100" />
+                          </button>
 
-                      {/* Swipeable row content */}
-                      <div
-                        className={`relative w-full grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-4 py-3 select-none touch-pan-y transition-colors ${
-                          darkMode ? 'bg-neutral-900 hover:bg-neutral-850/40' : 'bg-white hover:bg-[#fcf9f8]/40'
-                        }`}
-                        style={{
-                          transform: `translateX(${swipeOffsets[refill.id] || 0}px)`,
-                          transition: swipeRef.current?.id === refill.id ? 'none' : 'transform 200ms ease-out'
-                        }}
-                        onPointerDown={e => {
-                          e.currentTarget.setPointerCapture(e.pointerId);
-                          handlePointerStart(refill.id, e.clientX);
-                        }}
-                        onPointerMove={e => handlePointerMove(refill.id, e.clientX)}
-                        onPointerUp={e => handlePointerEnd(refill.id, e.clientX)}
-                      >
-                        <span className="font-semibold truncate">{refill.ingredientName}</span>
-                        <span className={`font-mono font-bold ${darkMode ? 'text-[#00f0ff]' : 'text-[#006970]'}`}>{refill.qtyAdded}</span>
-                        <span className="whitespace-nowrap">
-                          <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded uppercase font-bold tracking-wider whitespace-nowrap ${
-                            refill.method === 'OPTICAL AI'
-                              ? (darkMode
-                                  ? 'bg-[#00f0ff]/20 text-[#00f0ff] border border-[#00f0ff]/30'
-                                  : 'bg-[#00f0ff]/10 text-[#006970] border border-[#00dbe9]/30'
-                                )
-                              : (darkMode
-                                  ? 'bg-neutral-800 text-neutral-300'
-                                  : 'bg-neutral-100 text-neutral-600'
-                                )
-                          }`}>
-                            {methodLabel(refill.method)}
-                          </span>
-                        </span>
-                        <span className={`text-right font-mono ${darkMode ? 'text-neutral-400' : 'text-[#3b494b]'}`}>{refill.confidence}%</span>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          {/* Swipeable row content */}
+                          <div
+                            className={`relative w-full grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-4 py-3 select-none touch-pan-y transition-colors ${
+                              darkMode ? 'bg-neutral-900 hover:bg-neutral-850/40' : 'bg-white hover:bg-[#fcf9f8]/40'
+                            }`}
+                            style={{
+                              transform: `translateX(${offset}px)`,
+                              transition: swipeRef.current?.id === refill.id ? 'none' : 'transform 200ms ease-out'
+                            }}
+                            onPointerDown={e => {
+                              e.currentTarget.setPointerCapture(e.pointerId);
+                              handlePointerStart(refill.id, e.clientX);
+                            }}
+                            onPointerMove={e => handlePointerMove(refill.id, e.clientX)}
+                            onPointerUp={e => handlePointerEnd(refill.id, e.clientX)}
+                          >
+                            <span className="font-semibold truncate">{refill.ingredientName}</span>
+                            <span className={`font-mono font-bold ${darkMode ? 'text-[#00f0ff]' : 'text-[#006970]'}`}>{refill.qtyAdded}</span>
+                            <span className="whitespace-nowrap">
+                              <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded uppercase font-bold tracking-wider whitespace-nowrap ${
+                                refill.method === 'OPTICAL AI'
+                                  ? (darkMode
+                                      ? 'bg-[#00f0ff]/20 text-[#00f0ff] border border-[#00f0ff]/30'
+                                      : 'bg-[#00f0ff]/10 text-[#006970] border border-[#00dbe9]/30'
+                                    )
+                                  : (darkMode
+                                      ? 'bg-neutral-800 text-neutral-300'
+                                      : 'bg-neutral-100 text-neutral-600'
+                                    )
+                              }`}>
+                                {methodLabel(refill.method)}
+                              </span>
+                            </span>
+                            <span className={`text-right font-mono ${darkMode ? 'text-neutral-400' : 'text-[#3b494b]'}`}>{refill.confidence}%</span>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

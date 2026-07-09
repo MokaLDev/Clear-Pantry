@@ -396,36 +396,36 @@ export default function App() {
                   <button
                     id="tab-home"
                     onClick={() => setCurrentTab('home')}
-                    className={`flex flex-col items-center gap-1 flex-1 py-1 ${getTabButtonClass('home')}`}
+                    className={`flex flex-col items-center gap-1 flex-1 py-1 transition-transform duration-200 ease-out ${getTabButtonClass('home')}`}
                   >
-                    <Home size={18} className={currentTab === 'home' ? 'scale-110' : ''} />
+                    <Home size={18} className={`transition-transform duration-200 ease-out ${currentTab === 'home' ? 'scale-110' : ''}`} />
                     <span className="text-[10px] font-mono tracking-wider font-semibold">{translate(normalizeLanguage(config.language), 'app.home')}</span>
                   </button>
 
                   <button
                     id="tab-analyze"
                     onClick={() => setCurrentTab('analyze')}
-                    className={`flex flex-col items-center gap-1 flex-1 py-1 ${getTabButtonClass('analyze')}`}
+                    className={`flex flex-col items-center gap-1 flex-1 py-1 transition-transform duration-200 ease-out ${getTabButtonClass('analyze')}`}
                   >
-                    <Camera size={18} className={currentTab === 'analyze' ? 'scale-110' : ''} />
+                    <Camera size={18} className={`transition-transform duration-200 ease-out ${currentTab === 'analyze' ? 'scale-110' : ''}`} />
                     <span className="text-[10px] font-mono tracking-wider font-semibold">{translate(normalizeLanguage(config.language), 'app.analyze')}</span>
                   </button>
 
                   <button
                     id="tab-inventory"
                     onClick={() => setCurrentTab('inventory')}
-                    className={`flex flex-col items-center gap-1 flex-1 py-1 ${getTabButtonClass('inventory')}`}
+                    className={`flex flex-col items-center gap-1 flex-1 py-1 transition-transform duration-200 ease-out ${getTabButtonClass('inventory')}`}
                   >
-                    <LayoutGrid size={18} className={currentTab === 'inventory' ? 'scale-110' : ''} />
+                    <LayoutGrid size={18} className={`transition-transform duration-200 ease-out ${currentTab === 'inventory' ? 'scale-110' : ''}`} />
                     <span className="text-[10px] font-mono tracking-wider font-semibold">{translate(normalizeLanguage(config.language), 'app.pantry')}</span>
                   </button>
 
                   <button
                     id="tab-settings"
                     onClick={() => setCurrentTab('settings')}
-                    className={`flex flex-col items-center gap-1 flex-1 py-1 ${getTabButtonClass('settings')}`}
+                    className={`flex flex-col items-center gap-1 flex-1 py-1 transition-transform duration-200 ease-out ${getTabButtonClass('settings')}`}
                   >
-                    <Settings size={18} className={currentTab === 'settings' ? 'scale-110' : ''} />
+                    <Settings size={18} className={`transition-transform duration-200 ease-out ${currentTab === 'settings' ? 'scale-110' : ''}`} />
                     <span className="text-[10px] font-mono tracking-wider font-semibold">{translate(normalizeLanguage(config.language), 'app.settings')}</span>
                   </button>
                 </div>

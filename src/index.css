@@ -1,6 +1,13 @@
 @import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@300;400;500;600;700;800&family=Geist+Mono:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 
+/* Smooth color transitions when switching themes (e.g. dark mode) */
+* {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-duration: 300ms;
+  transition-timing-function: ease;
+}
+
 @theme {
   --font-sans: "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
@@ -34,6 +41,11 @@
   to { transform: scale(1); opacity: 1; }
 }
 
+@keyframes refill-enter {
+  from { opacity: 0; transform: translateX(1rem); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
 .animate-flash-shutter {
   animation: flash-shutter 0.25s ease-out forwards;
 }
@@ -48,6 +60,10 @@
 
 .animate-scale-up {
   animation: scale-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-refill-enter {
+  animation: refill-enter 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .animate-spin-slow {

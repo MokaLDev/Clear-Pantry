@@ -319,7 +319,7 @@
       }
     },
     {
-      "id": "user-1783506666850",
+      "id": "user-1783583695083",
       "username": "MokaL",
       "password": "114514",
       "info": "Personal kitchen account",
@@ -329,8 +329,8 @@
         "refills": [],
         "config": {
           "darkMode": false,
-          "language": "zh",
-          "reportGenerationLogic": ""
+          "language": "en",
+          "reportGenerationLogic": "Prioritize high-protein ingredients and list expiration dates in DD/MM/YYYY format..."
         }
       }
     }
