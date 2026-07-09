@@ -155,46 +155,6 @@ export default function App() {
     });
   };
 
-  // Handler: When user clicks "SHOOT" on Analyze page
-  const handleShootRecord = (detectedUpdates: { id: string; percentage: number; addedQty: string }[]) => {
-    updateKitchen((prev) => {
-      const updatedIngredients = prev.ingredients.map((item) => {
-        const update = detectedUpdates.find((u) => u.id === item.id);
-        if (!update) return item;
-        const newQty = Math.round((update.percentage / 100) * item.maxQty);
-        let newStatus: 'critical' | 'stable' | 'normal' = 'stable';
-        if (update.percentage <= 20) newStatus = 'critical';
-        else if (update.percentage >= 80) newStatus = 'normal';
-        return {
-          ...item,
-          currentQty: newQty,
-          percentage: update.percentage,
-          status: newStatus,
-          lastUpdated: new Date().toISOString()
-        };
-      });
-
-      const newRefills = detectedUpdates.map((update, idx) => {
-        const ingredient = prev.ingredients.find((i) => i.id === update.id);
-        const name = ingredient ? ingredient.name : update.id;
-        return {
-          id: `refill-cam-${Date.now()}-${idx}`,
-          ingredientName: name,
-          qtyAdded: update.addedQty,
-          method: 'OPTICAL AI' as const,
-          confidence: Math.round(92 + Math.random() * 7),
-          timestamp: 'Just shot'
-        };
-      });
-
-      return {
-        ...prev,
-        ingredients: updatedIngredients,
-        refills: [...newRefills, ...prev.refills]
-      };
-    });
-  };
-
   // Handler: Delete a refill log entry
   const handleDeleteRefill = (id: string) => {
     updateKitchen((prev) => ({
@@ -320,11 +280,7 @@ export default function App() {
         );
       case 'analyze':
         return (
-          <AnalyzeScreen
-            ingredients={ingredients}
-            onShootRecord={handleShootRecord}
-            isDemo={currentUser?.id === DEMO_USER_ID}
-          />
+          <AnalyzeScreen isDemo={currentUser?.id === DEMO_USER_ID} />
         );
       case 'inventory':
         return (

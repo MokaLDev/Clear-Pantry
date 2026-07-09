@@ -170,6 +170,9 @@ export const translations = {
       oilFound: 'OIL FOUND',
       committed: 'KITCHEN STATE COMMITTED TO CLOUD & PERSISTENCE',
       shootHint: 'Tap "SHOOT" to snapshot and log current level changes.',
+      cameraError: 'Unable to access the camera. Please allow camera permission and ensure a camera is available.',
+      switchCamera: 'Switch camera',
+      cameraOffline: 'Camera offline',
       demoLabels: {
         oliveOilCritical: 'OLIVE OIL - 10% REMAINING (CRITICAL)',
         basilCritical: 'FRESH BASIL - 5% (CRITICAL)',
@@ -469,6 +472,9 @@ export const translations = {
       oilFound: '检测到油',
       committed: '厨房状态已提交至云端并持久化',
       shootHint: '点击“拍摄”以快照并记录当前水平变化。',
+      cameraError: '无法访问相机。请允许相机权限并确保相机可用。',
+      switchCamera: '切换摄像头',
+      cameraOffline: '相机离线',
       demoLabels: {
         oliveOilCritical: '橄榄油 - 剩余 10%（严重不足）',
         basilCritical: '新鲜罗勒 - 5%（严重不足）',
@@ -768,6 +774,9 @@ export const translations = {
       oilFound: 'ACEITE ENCONTRADO',
       committed: 'ESTADO DE COCINA ENVIADO A LA NUBE Y PERSISTIDO',
       shootHint: 'Toca "DISPARAR" para capturar y registrar los cambios de nivel actuales.',
+      cameraError: 'No se puede acceder a la cámara. Permita el acceso a la cámara y asegúrese de que haya una disponible.',
+      switchCamera: 'Cambiar cámara',
+      cameraOffline: 'Cámara fuera de línea',
       demoLabels: {
         oliveOilCritical: 'ACEITE DE OLIVA - 10% RESTANTE (CRÍTICO)',
         basilCritical: 'ALBAHACA FRESCA - 5% (CRÍTICO)',
