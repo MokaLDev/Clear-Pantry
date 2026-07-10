@@ -41,7 +41,9 @@ function deepClone(obj) {
 
 async function createServer() {
   const app = express();
-  app.use(express.json());
+  app.use(express.json({ limit: '10mb' }));
+
+  const IMAGES_DIR = path.join(__dirname, 'data', 'images');
 
   // GET all users (for client-side validation fallback)
   app.get('/api/users', async (_req, res) => {
@@ -124,8 +126,23 @@ async function createServer() {
       return;
     }
 
+    const user = data.users[index];
+
+    // Remove account data
     data.users.splice(index, 1);
     await writeUsers(data);
+
+    // Remove the user's captured images
+    if (user.username) {
+      const userImagesDir = path.join(IMAGES_DIR, user.username);
+      try {
+        await fs.rm(userImagesDir, { recursive: true, force: true });
+        console.log(`Removed user images directory: ${userImagesDir}`);
+      } catch (err) {
+        console.error('Failed to remove user images:', err);
+      }
+    }
+
     res.json({ success: true });
   });
 
@@ -153,6 +170,36 @@ async function createServer() {
 
     await writeUsers(data);
     res.json({ success: true });
+  });
+
+  // POST capture image from camera and save under data/images/:username
+  app.post('/api/capture/:userId', async (req, res) => {
+    const { image } = req.body;
+    if (!image || typeof image !== 'string' || !image.startsWith('data:image/')) {
+      res.status(400).json({ success: false, message: 'Invalid image data.' });
+      return;
+    }
+
+    const user = await findUserById(req.params.userId);
+    if (!user) {
+      res.status(404).json({ success: false, message: 'User not found.' });
+      return;
+    }
+
+    const userDir = path.join(IMAGES_DIR, user.username);
+    await fs.mkdir(userDir, { recursive: true });
+
+    const base64 = image.replace(/^data:image\/\w+;base64,/, '');
+    const buffer = Buffer.from(base64, 'base64');
+    const filename = `${Date.now()}.jpg`;
+    const filePath = path.join(userDir, filename);
+    await fs.writeFile(filePath, buffer);
+
+    res.json({
+      success: true,
+      filename,
+      path: `data/images/${user.username}/${filename}`
+    });
   });
 
   if (isProduction) {

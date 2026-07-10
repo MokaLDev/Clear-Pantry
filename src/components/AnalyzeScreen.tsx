@@ -1,12 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Camera, SwitchCamera } from 'lucide-react';
 import { useI18n } from '../i18n';
+import { User } from '../types';
 
 interface AnalyzeScreenProps {
+  user: User | null;
   isDemo?: boolean;
 }
 
-export default function AnalyzeScreen({ isDemo = false }: AnalyzeScreenProps) {
+export default function AnalyzeScreen({ user, isDemo = false }: AnalyzeScreenProps) {
   const { t } = useI18n();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -80,9 +82,43 @@ export default function AnalyzeScreen({ isDemo = false }: AnalyzeScreenProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [useBackCamera]);
 
-  const handleShoot = () => {
+  const handleShoot = async () => {
+    const video = videoRef.current;
+    if (!video || video.readyState < 2 || !user) return;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Mirror the saved image when the front camera preview is mirrored.
+    if (!useBackCamera) {
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+    }
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+
     setShutterFlash(true);
     setTimeout(() => setShutterFlash(false), 250);
+
+    try {
+      const response = await fetch(`/api/capture/${user.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: dataUrl })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        console.error('Failed to save capture:', result.message);
+      } else {
+        console.log('Capture saved:', result.filename);
+      }
+    } catch (err) {
+      console.error('Capture upload failed:', err);
+    }
   };
 
   const handleSwitchCamera = () => {
@@ -121,7 +157,6 @@ export default function AnalyzeScreen({ isDemo = false }: AnalyzeScreenProps) {
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00f0ff] opacity-75"></span>
             <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#00f0ff]"></span>
           </span>
-          <span className="text-xs font-mono font-bold tracking-widest text-[#00f0ff]">{t('analyze.aiActive')}</span>
         </div>
 
         {hasMultipleCameras && (
@@ -141,7 +176,7 @@ export default function AnalyzeScreen({ isDemo = false }: AnalyzeScreenProps) {
       <div className="z-10 w-full mt-auto flex items-center justify-center pb-8 px-4 pointer-events-none">
         <button
           onClick={handleShoot}
-          disabled={!!error}
+          disabled={!!error || !user}
           className="pointer-events-auto w-14 h-14 bg-[#fcf9f8] text-black hover:bg-white active:scale-90 transition-all rounded-full flex items-center justify-center shadow-2xl border-4 border-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed"
           title="Capture scan"
         >

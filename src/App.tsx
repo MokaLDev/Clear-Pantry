@@ -280,7 +280,7 @@ export default function App() {
         );
       case 'analyze':
         return (
-          <AnalyzeScreen isDemo={currentUser?.id === DEMO_USER_ID} />
+          <AnalyzeScreen user={currentUser} isDemo={currentUser?.id === DEMO_USER_ID} />
         );
       case 'inventory':
         return (

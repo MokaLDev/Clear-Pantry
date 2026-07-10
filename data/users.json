@@ -319,11 +319,11 @@
       }
     },
     {
-      "id": "user-1783606661435",
+      "id": "user-1783669802767",
       "username": "MokaL",
       "password": "114514",
       "info": "Personal kitchen account",
-      "seenWelcome": true,
+      "seenWelcome": false,
       "kitchen": {
         "ingredients": [],
         "refills": [],

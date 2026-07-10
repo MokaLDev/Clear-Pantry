@@ -31,3 +31,6 @@ pnpm-debug.log*
 
 # TypeScript cache
 *.tsbuildinfo
+
+# User-captured images
+data/images/

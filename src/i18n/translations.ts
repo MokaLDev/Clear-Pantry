@@ -243,7 +243,7 @@ export const translations = {
         logoutConfirm: 'Log out of your account?',
         logout: 'LOG OUT',
         demoCannotDelete: 'The demo account cannot be deleted.',
-        deleteConfirm: 'Delete account "{username}" permanently? This cannot be undone.',
+        deleteConfirm: 'Delete account "{username}" permanently? All saved photos will also be removed. This cannot be undone.',
         deleteAccount: 'DELETE ACCOUNT'
       },
       appearance: 'Appearance',
@@ -545,7 +545,7 @@ export const translations = {
         logoutConfirm: '退出账户？',
         logout: '退出登录',
         demoCannotDelete: '演示账户无法删除。',
-        deleteConfirm: '永久删除账户“{username}”？此操作无法撤销。',
+        deleteConfirm: '永久删除账户“{username}”？所有保存的照片也将被删除。此操作无法撤销。',
         deleteAccount: '删除账户'
       },
       appearance: '外观',
@@ -847,7 +847,7 @@ export const translations = {
         logoutConfirm: '¿Cerrar sesión en tu cuenta?',
         logout: 'CERRAR SESIÓN',
         demoCannotDelete: 'La cuenta de demostración no se puede eliminar.',
-        deleteConfirm: '¿Eliminar permanentemente la cuenta "{username}"? Esto no se puede deshacer.',
+        deleteConfirm: '¿Eliminar permanentemente la cuenta "{username}"? Todas las fotos guardadas también se eliminarán. Esto no se puede deshacer.',
         deleteAccount: 'ELIMINAR CUENTA'
       },
       appearance: 'Apariencia',

@@ -36,9 +36,8 @@ export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, o
           <span className={`text-[10px] uppercase font-mono tracking-wider ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>{t('home.morningAnalysis')}</span>
           <h2 className="text-xl font-bold tracking-tight">{t('home.kitchenStatus')}</h2>
         </div>
-        <div className={`flex items-center gap-1.5 ${darkMode ? 'text-[#00f0ff]' : 'text-[#006970]'}`}>
+        <div className={`flex items-center ${darkMode ? 'text-[#00f0ff]' : 'text-[#006970]'}`}>
           <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${darkMode ? 'bg-[#00f0ff]' : 'bg-[#006970]'}`} />
-          <span className="text-[11px] font-mono tracking-tight">{t('home.allSystemsCalibrated')}</span>
         </div>
       </div>
 

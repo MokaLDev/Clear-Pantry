@@ -19,10 +19,10 @@ export default function WelcomeScreen({ onStart }: WelcomeScreenProps) {
       {/* Top Margin Buffer */}
       <div className="w-full z-10 flex justify-between items-center pt-2">
         <span className="text-[10px] tracking-widest text-[#6a7a7b] font-mono">{t('welcome.systemVersion')}</span>
-        <div className="flex items-center gap-1.5 bg-[#ebe7e7] px-2 py-0.5 rounded text-[10px] text-[#006970] font-mono">
-          <span className="w-1.5 h-1.5 bg-[#006970] rounded-full animate-ping" />
-          {t('welcome.active')}
-        </div>
+        <span className="relative flex h-3 w-3">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#006970] opacity-75" />
+          <span className="relative inline-flex rounded-full h-3 w-3 bg-[#006970]" />
+        </span>
       </div>
 
       {/* Main Branding and Breathing Core */}
@@ -81,10 +81,6 @@ export default function WelcomeScreen({ onStart }: WelcomeScreenProps) {
         <div className="flex flex-col">
           <span className="text-[9px] font-mono text-[#6a7a7b] tracking-wider uppercase">{t('welcome.currentBuild')}</span>
           <span className="text-xs font-mono text-[#3b494b] font-medium">{t('welcome.buildVersion')}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 bg-[#006970] rounded-full animate-ping" />
-          <span className="text-xs font-mono text-[#006970] font-medium tracking-wider uppercase">{t('welcome.synced')}</span>
         </div>
       </div>
 
