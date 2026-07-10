@@ -323,12 +323,12 @@
       "username": "MokaL",
       "password": "114514",
       "info": "Personal kitchen account",
-      "seenWelcome": false,
+      "seenWelcome": true,
       "kitchen": {
         "ingredients": [],
         "refills": [],
         "config": {
-          "darkMode": false,
+          "darkMode": true,
           "language": "en",
           "reportGenerationLogic": "Prioritize high-protein ingredients and list expiration dates in DD/MM/YYYY format..."
         }
