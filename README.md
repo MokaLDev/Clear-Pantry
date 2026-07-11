@@ -18,6 +18,8 @@
   - Tap a grid photo to open the detail view.
   - Single-photo delete in detail view; multi-select delete in grid view.
 - **AI-Powered Image Analysis** — Send any pantry photo to a real vision model (Baidu Qianfan `kimi-k2.6` via the OpenAI-compatible API) and receive a short ingredient summary in the user’s selected language.
+- **Extended AI Conversation** — Open a foldable chat drawer on any gallery photo to ask follow-up questions, save the conversation, and continue later.
+- **AI Refill Detection** — Tap **Detect Refill** to let the AI scan the photo for newly added ingredients or refills. Review and edit the detected items in a confirmation window, then approve to record them in the pantry refills chart.
 - **Smart Home Dashboard** — View key stats, ingredient consumption summaries, and AI-generated healthy diet advice. *(Demo account only; placeholder state for other accounts.)*
 - **Consumption Dashboard / Pantry** — Browse detailed inventory levels, review refill history, and log manual restocks.
 - **Visual Data Insights** — Track ingredient quantities over time with an interactive line chart based on live pantry data.
@@ -209,13 +211,22 @@ The Express server in `server.js` exposes:
 ### AI
 
 - `POST /api/analyze-image/:userId` — analyze a stored image with Baidu Qianfan and return a short ingredient summary
+- `POST /api/ai-conversation/:userId` — multi-turn AI assistant that returns structured JSON (`reply`, `detectedRefills`, `detectedIngredients`, etc.)
+
+### Conversations
+
+- `GET /api/conversations/:userId` — list saved AI conversations for a user
+- `GET /api/conversations/:userId/:conversationId` — load a saved conversation
+- `POST /api/conversations/:userId/:conversationId` — save or overwrite a conversation
+- `DELETE /api/conversations/:userId/:conversationId` — delete a saved conversation
 
 ---
 
 ## Demo Notes
 
 - The Analyze page uses a live `getUserMedia` camera preview. On mobile devices a secure context (HTTPS or localhost) is required.
-- AI object detection, capacity estimation, dietary advice, and critical alerts are simulated for the demo account dashboard, but image analysis on the Analyze page is powered by the configured Baidu Qianfan model when an `API_KEY` is present.
+- AI object detection, capacity estimation, dietary advice, and critical alerts are simulated for the demo account dashboard, but image analysis and AI conversation on the Analyze page are powered by the configured Baidu Qianfan model when an `API_KEY` is present.
+- Saved AI conversations are stored under `data/conversations/<username>/` and are removed when the account is deleted.
 - Non-demo accounts see placeholder states for AI-dependent dashboard features while retaining full pantry tracking, photo capture, gallery, and image analysis functionality.
 - Account credentials are stored in plain text in `data/users.json` for this local demo. A production app must use password hashing and a real database.
 

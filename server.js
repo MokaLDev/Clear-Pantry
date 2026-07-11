@@ -9,6 +9,7 @@ import OpenAI from 'openai';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const USERS_FILE = path.join(__dirname, 'data', 'users.json');
 const IMAGES_DIR = path.join(__dirname, 'data', 'images');
+const CONVERSATIONS_DIR = path.join(__dirname, 'data', 'conversations');
 const PORT = process.env.PORT || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -67,6 +68,122 @@ async function resolveUserImagePath(userId, filename) {
   // Security: ensure the resolved path stays inside the user's own folder.
   if (!filePath.startsWith(userDir + path.sep)) return null;
   return filePath;
+}
+
+async function resolveUserConversationDir(userId) {
+  const user = await findUserById(userId);
+  if (!user || !user.username) return null;
+  const userDir = path.resolve(path.join(CONVERSATIONS_DIR, user.username));
+  return userDir;
+}
+
+function isValidConversationId(id) {
+  return typeof id === 'string' && /^[a-zA-Z0-9_-]+$/.test(id);
+}
+
+function getLanguageName(language) {
+  const languageNames = { en: 'English', zh: 'Chinese', es: 'Spanish' };
+  return languageNames[language] || 'English';
+}
+
+function buildAiSystemPrompt(language, mode, kitchenContext) {
+  const languageName = getLanguageName(language);
+
+  const baseInstructions = `You are a precise kitchen inventory assistant. The user is looking at a photo from their pantry. Respond in ${languageName}.`;
+
+  const schemaInstructions = `
+Return your response as a single JSON object matching this schema:
+{
+  "version": "1.0.0",
+  "reply": "<human-readable answer, can use Markdown>",
+  "requiresConfirmation": <boolean>,
+  "detectedRefills": [
+    {
+      "ingredientName": "string (required)",
+      "quantity": <number (required)>,
+      "unit": "g | ml | pcs | %",
+      "confidence": <number 0-100>,
+      "category": "string",
+      "notes": "string"
+    }
+  ],
+  "detectedIngredients": [
+    {
+      "name": "string (required)",
+      "category": "string (required)",
+      "currentQty": <number (required)>,
+      "maxQty": <number (required)>,
+      "unit": "g | ml | pcs | %",
+      "freshness": <number 0-100>,
+      "spoilageRisk": "High | Medium | Low",
+      "confidence": <number 0-100>,
+      "notes": "string"
+    }
+  ],
+  "actions": []
+}
+
+Rules:
+- "reply" is required and should be a concise, friendly message.
+- Set "requiresConfirmation" to true whenever you include detectedRefills or detectedIngredients that the user must approve before they are written to the pantry.
+- If the user is just asking a question, you may leave detectedRefills and detectedIngredients empty and set requiresConfirmation to false.
+- If the user asks you to record a refill or add an ingredient, populate the relevant arrays and set requiresConfirmation to true.
+- Do not wrap the JSON in markdown code fences. Output raw JSON only.`;
+
+  const contextInstructions = kitchenContext
+    ? `
+Current pantry context (so you can avoid duplicates and suggest accurate quantities):
+${JSON.stringify(kitchenContext, null, 2)}`
+    : '';
+
+  if (mode === 'refill') {
+    return `${baseInstructions}
+The user wants you to detect new refills or newly added ingredients from the attached photo.
+Inspect the image carefully. For each visible item, emit a detectedRefill entry with quantity, unit, and confidence.
+Use the pantry context to decide if an item matches an existing ingredient. If it matches, set ingredientName to the exact existing ingredient name so the client can add the quantity to that container. If it does not match any existing ingredient, set ingredientName to the new item's name and set isNewIngredient to true.
+Only use detectedRefills in this mode; leave detectedIngredients empty.
+Set requiresConfirmation to true unless the image contains nothing detectable.
+${contextInstructions}
+${schemaInstructions}`;
+  }
+
+  return `${baseInstructions}
+Answer the user's question or follow their request about the attached photo. The image may contain food, raw ingredients, packaged groceries, refills, or any other kitchen-related items.
+${contextInstructions}
+${schemaInstructions}`;
+}
+
+function extractJson(text) {
+  if (!text) return null;
+  const trimmed = text.trim();
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      // fall through to regex extraction
+    }
+  }
+  const match = trimmed.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    return JSON.parse(match[0]);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeAiResponse(raw) {
+  if (!raw || typeof raw !== 'object') {
+    return { version: '1.0.0', reply: String(raw || ''), requiresConfirmation: false };
+  }
+  return {
+    version: raw.version || '1.0.0',
+    reply: typeof raw.reply === 'string' ? raw.reply : '',
+    requiresConfirmation: !!raw.requiresConfirmation,
+    detectedRefills: Array.isArray(raw.detectedRefills) ? raw.detectedRefills : [],
+    detectedIngredients: Array.isArray(raw.detectedIngredients) ? raw.detectedIngredients : [],
+    actions: Array.isArray(raw.actions) ? raw.actions : []
+  };
 }
 
 async function createServer() {
@@ -168,6 +285,15 @@ async function createServer() {
         console.log(`Removed user images directory: ${userImagesDir}`);
       } catch (err) {
         console.error('Failed to remove user images:', err);
+      }
+
+      // Remove the user's saved AI conversations
+      const userConversationsDir = path.join(CONVERSATIONS_DIR, user.username);
+      try {
+        await fs.rm(userConversationsDir, { recursive: true, force: true });
+        console.log(`Removed user conversations directory: ${userConversationsDir}`);
+      } catch (err) {
+        console.error('Failed to remove user conversations:', err);
       }
     }
 
@@ -339,6 +465,331 @@ async function createServer() {
       const responseData = err?.response?.data || err?.error;
       console.error('AI analysis failed:', message, responseData || '');
       res.status(500).json({ success: false, message: 'AI analysis failed.' });
+    }
+  });
+
+  // POST /api/ai-conversation/:userId
+  // Multi-turn AI assistant that returns structured JSON for chat and refill detection.
+  app.post('/api/ai-conversation/:userId', async (req, res) => {
+    const { filename, mode = 'chat', language = 'en', messages = [], kitchenContext } = req.body;
+
+    if (!filename || typeof filename !== 'string') {
+      res.status(400).json({ success: false, message: 'Invalid filename.' });
+      return;
+    }
+
+    const filePath = await resolveUserImagePath(req.params.userId, filename);
+    if (!filePath) {
+      res.status(404).json({ success: false, message: 'Image not found.' });
+      return;
+    }
+
+    if (!openai) {
+      res.status(503).json({ success: false, message: 'AI service is not configured.' });
+      return;
+    }
+
+    let buffer;
+    try {
+      buffer = await fs.readFile(filePath);
+    } catch (err) {
+      console.error('Failed to read image for AI analysis:', err);
+      res.status(500).json({ success: false, message: 'Failed to read image for analysis.' });
+      return;
+    }
+
+    const base64 = buffer.toString('base64');
+    const dataUrl = `data:image/jpeg;base64,${base64}`;
+    const systemPrompt = buildAiSystemPrompt(language, mode, kitchenContext);
+
+    const baseMessages = [
+      { role: 'system', content: systemPrompt },
+      ...(messages || [])
+        .filter((m) => m && (m.role === 'user' || m.role === 'assistant'))
+        .map((m) => ({ role: m.role, content: m.content }))
+    ];
+
+    const makeAttemptMessages = (reminder) => [
+      ...baseMessages,
+      {
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: dataUrl } },
+          {
+            type: 'text',
+            text: mode === 'refill'
+              ? `Detect all refills and newly added ingredients in this image. Return JSON only.${reminder}`
+              : `Respond to my previous message about this image. Return JSON only.${reminder}`
+          }
+        ]
+      },
+      { role: 'assistant', content: '' }
+    ];
+
+    const MAX_ATTEMPTS = 2;
+    let lastRawContent = '';
+    let lastParsed = null;
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        const reminder = attempt > 1
+          ? ' IMPORTANT: your previous response was not valid JSON. Return ONLY a raw JSON object, no markdown code fences, no explanations.'
+          : '';
+
+        const response = await openai.chat.completions.create({
+          model: 'kimi-k2.6',
+          messages: makeAttemptMessages(reminder),
+          stop: [],
+          enable_thinking: false,
+          max_tokens: 1024
+        });
+
+        lastRawContent = response.choices?.[0]?.message?.content || '';
+        lastParsed = extractJson(lastRawContent);
+
+        if (lastParsed) {
+          // Success path: valid JSON extracted.
+          const normalized = normalizeAiResponse(lastParsed);
+          res.json({ success: true, message: normalized, raw: lastRawContent });
+          return;
+        }
+
+        console.warn(`AI conversation attempt ${attempt} produced non-JSON output. Raw:`, lastRawContent.slice(0, 200));
+      } catch (err) {
+        lastError = err;
+        const message = err?.message || String(err);
+        const responseData = err?.response?.data || err?.error;
+        console.error(`AI conversation attempt ${attempt} failed:`, message, responseData || '');
+      }
+    }
+
+    // If we get here, no attempt returned valid JSON or an API call failed.
+    if (lastError) {
+      const errMsg = lastError?.message || String(lastError);
+      const userMessage = errMsg.toLowerCase().includes('timeout')
+        ? 'AI service timed out. Please try again.'
+        : `AI service error: ${errMsg}`;
+      res.status(503).json({ success: false, message: userMessage });
+      return;
+    }
+
+    // API succeeded but model never returned valid JSON. Return the raw text so the client can show it instead of a cryptic error.
+    res.json({
+      success: true,
+      message: {
+        version: '1.0.0',
+        reply: lastRawContent || 'The AI did not return a parseable response. Please try again.',
+        requiresConfirmation: false,
+        detectedRefills: [],
+        detectedIngredients: [],
+        actions: []
+      },
+      raw: lastRawContent
+    });
+  });
+
+  // POST /api/diet-advice/:userId
+  // Generate a short, personalized dietary tip based on the user's pantry.
+  app.post('/api/diet-advice/:userId', async (req, res) => {
+    const { ingredients = [], language = 'en', focus = 'balanced' } = req.body;
+
+    if (!openai) {
+      res.status(503).json({ success: false, message: 'AI service is not configured.' });
+      return;
+    }
+
+    const languageName = getLanguageName(language);
+    const ingredientSummary = Array.isArray(ingredients) && ingredients.length
+      ? ingredients.map((i) => {
+          const parts = [`${i.name}: ${i.currentQty}/${i.maxQty ?? i.currentQty}${i.unit} (${i.percentage ?? 100}%)`];
+          if (i.spoilageRisk) parts.push(`spoilage: ${i.spoilageRisk}`);
+          if (typeof i.freshness === 'number') parts.push(`freshness: ${i.freshness}%`);
+          return parts.join(', ');
+        }).join('\n')
+      : 'No ingredients available.';
+
+    let lastErr = null;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const response = await openai.chat.completions.create({
+          model: 'kimi-k2.6',
+          messages: [
+            {
+              role: 'system',
+              content: `You are a helpful nutrition assistant. The user wants a short, practical dietary tip based on the ingredients currently in their kitchen. Respond in ${languageName}. Keep it to 1-2 sentences. Be concise and actionable. Each request has a different focus; make sure your tip reflects the focus and uses specific ingredients and their stock/freshness when relevant. Avoid repeating the exact same wording every time.`
+            },
+            {
+              role: 'user',
+              content: `Focus for this tip: ${focus}.\n\nHere is what I have in my kitchen:\n${ingredientSummary}\n\nGive me one short dietary tip based on the focus above.`
+            }
+          ],
+          max_tokens: 256
+        });
+
+        const advice = response.choices?.[0]?.message?.content?.trim() || '';
+        if (advice) {
+          res.json({ success: true, advice });
+          return;
+        }
+        lastErr = new Error('Empty advice response.');
+      } catch (err) {
+        lastErr = err;
+        const message = err?.message || String(err);
+        const responseData = err?.response?.data || err?.error;
+        console.error(`Diet advice generation failed (attempt ${attempt}):`, message, responseData || '');
+      }
+    }
+
+    res.status(500).json({ success: false, message: 'Diet advice generation failed.' });
+  });
+
+  // GET saved conversations for a user
+  app.get('/api/conversations/:userId', async (req, res) => {
+    const userDir = await resolveUserConversationDir(req.params.userId);
+    if (!userDir) {
+      res.status(404).json({ success: false, message: 'User not found.' });
+      return;
+    }
+
+    try {
+      await fs.mkdir(userDir, { recursive: true });
+      const entries = await fs.readdir(userDir);
+      const conversations = await Promise.all(
+        entries
+          .filter((f) => f.endsWith('.json'))
+          .map(async (f) => {
+            const filePath = path.join(userDir, f);
+            try {
+              const raw = await fs.readFile(filePath, 'utf-8');
+              const data = JSON.parse(raw);
+              const excerpt = Array.isArray(data.messages)
+                ? data.messages.slice(-2).map((m) => m.content).join(' ').slice(0, 80)
+                : '';
+              return {
+                id: data.id || f.replace('.json', ''),
+                imageFilename: data.imageFilename || '',
+                excerpt,
+                updatedAt: data.updatedAt || data.createdAt || new Date().toISOString()
+              };
+            } catch {
+              return null;
+            }
+          })
+      );
+      res.json({ success: true, conversations: conversations.filter(Boolean) });
+    } catch (err) {
+      console.error('Failed to list conversations:', err);
+      res.status(500).json({ success: false, message: 'Failed to list conversations.' });
+    }
+  });
+
+  // GET a specific saved conversation
+  app.get('/api/conversations/:userId/:conversationId', async (req, res) => {
+    const { conversationId } = req.params;
+    if (!isValidConversationId(conversationId)) {
+      res.status(400).json({ success: false, message: 'Invalid conversation id.' });
+      return;
+    }
+
+    const userDir = await resolveUserConversationDir(req.params.userId);
+    if (!userDir) {
+      res.status(404).json({ success: false, message: 'User not found.' });
+      return;
+    }
+
+    const filePath = path.join(userDir, `${conversationId}.json`);
+    if (!path.resolve(filePath).startsWith(userDir + path.sep)) {
+      res.status(400).json({ success: false, message: 'Invalid conversation id.' });
+      return;
+    }
+
+    try {
+      const raw = await fs.readFile(filePath, 'utf-8');
+      const data = JSON.parse(raw);
+      res.json({ success: true, conversation: data });
+    } catch {
+      res.status(404).json({ success: false, message: 'Conversation not found.' });
+    }
+  });
+
+  // POST create or update a saved conversation
+  app.post('/api/conversations/:userId/:conversationId', async (req, res) => {
+    const { conversationId } = req.params;
+    if (!isValidConversationId(conversationId)) {
+      res.status(400).json({ success: false, message: 'Invalid conversation id.' });
+      return;
+    }
+
+    const { imageFilename, messages } = req.body;
+    if (!imageFilename || !Array.isArray(messages)) {
+      res.status(400).json({ success: false, message: 'imageFilename and messages are required.' });
+      return;
+    }
+
+    const userDir = await resolveUserConversationDir(req.params.userId);
+    if (!userDir) {
+      res.status(404).json({ success: false, message: 'User not found.' });
+      return;
+    }
+
+    const filePath = path.join(userDir, `${conversationId}.json`);
+    if (!path.resolve(filePath).startsWith(userDir + path.sep)) {
+      res.status(400).json({ success: false, message: 'Invalid conversation id.' });
+      return;
+    }
+
+    try {
+      await fs.mkdir(userDir, { recursive: true });
+      let existing = null;
+      try {
+        existing = JSON.parse(await fs.readFile(filePath, 'utf-8'));
+      } catch {
+        // new conversation
+      }
+
+      const now = new Date().toISOString();
+      const conversation = {
+        id: conversationId,
+        imageFilename,
+        createdAt: existing?.createdAt || now,
+        updatedAt: now,
+        messages
+      };
+
+      await fs.writeFile(filePath, JSON.stringify(conversation, null, 2));
+      res.json({ success: true, conversation });
+    } catch (err) {
+      console.error('Failed to save conversation:', err);
+      res.status(500).json({ success: false, message: 'Failed to save conversation.' });
+    }
+  });
+
+  // DELETE a saved conversation
+  app.delete('/api/conversations/:userId/:conversationId', async (req, res) => {
+    const { conversationId } = req.params;
+    if (!isValidConversationId(conversationId)) {
+      res.status(400).json({ success: false, message: 'Invalid conversation id.' });
+      return;
+    }
+
+    const userDir = await resolveUserConversationDir(req.params.userId);
+    if (!userDir) {
+      res.status(404).json({ success: false, message: 'User not found.' });
+      return;
+    }
+
+    const filePath = path.join(userDir, `${conversationId}.json`);
+    if (!path.resolve(filePath).startsWith(userDir + path.sep)) {
+      res.status(400).json({ success: false, message: 'Invalid conversation id.' });
+      return;
+    }
+
+    try {
+      await fs.unlink(filePath);
+      res.json({ success: true });
+    } catch {
+      res.status(404).json({ success: false, message: 'Conversation not found.' });
     }
   });
 

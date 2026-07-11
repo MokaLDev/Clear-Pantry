@@ -1,17 +1,51 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Camera, SwitchCamera, X, ChevronLeft, Loader2, Plus, Trash2, Check } from 'lucide-react';
+import {
+  Camera,
+  SwitchCamera,
+  X,
+  ChevronLeft,
+  Loader2,
+  Plus,
+  Trash2,
+  Check,
+  ChevronUp,
+  ChevronDown,
+  Send,
+  Save
+} from 'lucide-react';
 import { useI18n } from '../i18n';
-import { User } from '../types';
+import {
+  User,
+  Ingredient,
+  RefillRecord,
+  ChatMessage,
+  AiAssistantResponse,
+  DetectedRefill,
+  DetectedIngredient
+} from '../types';
 
 interface AnalyzeScreenProps {
   user: User | null;
   isDemo?: boolean;
+  ingredients?: Ingredient[];
+  refills?: RefillRecord[];
+  onApplyDetections?: (payload: {
+    refills?: DetectedRefill[];
+    ingredients?: DetectedIngredient[];
+  }) => void;
 }
 
-export default function AnalyzeScreen({ user, isDemo = false }: AnalyzeScreenProps) {
+export default function AnalyzeScreen({
+  user,
+  isDemo = false,
+  ingredients = [],
+  refills = [],
+  onApplyDetections
+}: AnalyzeScreenProps) {
   const { t, language } = useI18n();
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [useBackCamera, setUseBackCamera] = useState(false);
@@ -22,12 +56,19 @@ export default function AnalyzeScreen({ user, isDemo = false }: AnalyzeScreenPro
   const [showGallery, setShowGallery] = useState(false);
   const [galleryMode, setGalleryMode] = useState<'grid' | 'detail'>('grid');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [aiResult, setAiResult] = useState<string | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [dragStartX, setDragStartX] = useState<number | null>(null);
   const [dragOffset, setDragOffset] = useState(0);
+
+  // AI conversation state
+  const [conversationOpen, setConversationOpen] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [pendingDetections, setPendingDetections] = useState<DetectedRefill[] | null>(null);
+  const [showDetectionModal, setShowDetectionModal] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   const stopStream = () => {
     stream?.getTracks().forEach((track) => track.stop());
@@ -197,49 +238,27 @@ export default function AnalyzeScreen({ user, isDemo = false }: AnalyzeScreenPro
   const openGallery = () => {
     setGalleryMode('grid');
     setSelectedImage(null);
-    setAiResult(null);
     setShowGallery(true);
   };
 
   const closeGallery = () => {
     setShowGallery(false);
     setSelectedImage(null);
-    setAiResult(null);
+    setPendingDetections(null);
+    setShowDetectionModal(false);
   };
 
   const openImageDetail = (filename: string) => {
     setSelectedImage(filename);
-    setAiResult(null);
     setGalleryMode('detail');
+    setConversationOpen(false);
   };
 
   const backToGrid = () => {
     setGalleryMode('grid');
     setSelectedImage(null);
-    setAiResult(null);
-  };
-
-  const handleAiDetect = async () => {
-    if (!user || !selectedImage) return;
-    setAiLoading(true);
-    setAiResult(null);
-    try {
-      const res = await fetch(`/api/analyze-image/${user.id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: selectedImage, language })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setAiResult(data.result);
-      } else {
-        setAiResult(t('analyze.aiError'));
-      }
-    } catch (err) {
-      setAiResult(t('analyze.aiError'));
-    } finally {
-      setAiLoading(false);
-    }
+    setPendingDetections(null);
+    setShowDetectionModal(false);
   };
 
   const handleDeletePhoto = async () => {
@@ -309,7 +328,6 @@ export default function AnalyzeScreen({ user, isDemo = false }: AnalyzeScreenPro
     const newIdx = idx + direction;
     if (newIdx >= 0 && newIdx < images.length) {
       setSelectedImage(images[newIdx]);
-      setAiResult(null);
     }
   };
 
@@ -345,6 +363,278 @@ export default function AnalyzeScreen({ user, isDemo = false }: AnalyzeScreenPro
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [showGallery]);
+
+  // ---------------------------------------------------------------------------
+  // AI conversation helpers
+  // ---------------------------------------------------------------------------
+
+  const conversationIdForImage = (filename: string) =>
+    `conv-${filename.replace(/\.[^.]+$/, '')}`;
+
+  const loadConversation = async (filename: string) => {
+    if (!user) return;
+    const conversationId = conversationIdForImage(filename);
+    try {
+      const res = await fetch(`/api/conversations/${user.id}/${conversationId}`);
+      const data = await res.json();
+      if (data.success && data.conversation?.messages) {
+        setMessages(data.conversation.messages);
+      } else {
+        setMessages([]);
+      }
+    } catch {
+      setMessages([]);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedImage && galleryMode === 'detail') {
+      loadConversation(selectedImage);
+      setPendingDetections(null);
+      setShowDetectionModal(false);
+      setSaveStatus('idle');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedImage, galleryMode]);
+
+  useEffect(() => {
+    if (conversationOpen) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, conversationOpen]);
+
+  const saveConversation = async () => {
+    if (!user || !selectedImage || messages.length === 0) return;
+    const conversationId = conversationIdForImage(selectedImage);
+    setSaveStatus('saving');
+    try {
+      const res = await fetch(`/api/conversations/${user.id}/${conversationId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageFilename: selectedImage, messages })
+      });
+      if (res.ok) {
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 2000);
+      } else {
+        setSaveStatus('error');
+      }
+    } catch {
+      setSaveStatus('error');
+    }
+  };
+
+  const handleClearConversation = async () => {
+    if (!user || !selectedImage) return;
+    const conversationId = conversationIdForImage(selectedImage);
+    setMessages([]);
+    try {
+      await fetch(`/api/conversations/${user.id}/${conversationId}`, { method: 'DELETE' });
+    } catch {
+      // ignore cleanup errors
+    }
+  };
+
+  const buildKitchenContext = () => ({
+    ingredients: ingredients.map((i) => ({
+      name: i.name,
+      currentQty: i.currentQty,
+      maxQty: i.maxQty,
+      unit: i.unit,
+      category: i.category
+    })),
+    refills: refills.slice(0, 20).map((r) => ({
+      ingredientName: r.ingredientName,
+      qtyAdded: r.qtyAdded,
+      method: r.method,
+      timestamp: r.timestamp
+    }))
+  });
+
+  const callAiConversation = async (
+    mode: 'chat' | 'refill',
+    outgoingMessages: ChatMessage[]
+  ): Promise<AiAssistantResponse | null> => {
+    if (!user || !selectedImage) return null;
+    try {
+      const res = await fetch(`/api/ai-conversation/${user.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: selectedImage,
+          mode,
+          language,
+          messages: outgoingMessages,
+          kitchenContext: buildKitchenContext()
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.message) {
+        return data.message as AiAssistantResponse;
+      }
+      // Server returned success:false with a specific message.
+      return {
+        version: '1.0.0',
+        reply: data.message || t('analyze.aiError'),
+        requiresConfirmation: false
+      };
+    } catch {
+      return { version: '1.0.0', reply: t('analyze.aiError'), requiresConfirmation: false };
+    }
+  };
+
+  const appendAssistantMessage = (reply: string) => {
+    setMessages((prev) => [
+      ...prev,
+      { role: 'assistant', content: reply, timestamp: new Date().toISOString() }
+    ]);
+  };
+
+  const handleSendChat = async () => {
+    if (!chatInput.trim() || chatLoading || !user) return;
+    const userText = chatInput.trim();
+    setChatInput('');
+    const userMessage: ChatMessage = {
+      role: 'user',
+      content: userText,
+      timestamp: new Date().toISOString()
+    };
+    const nextMessages = [...messages, userMessage];
+    setMessages(nextMessages);
+    setChatLoading(true);
+
+    const response = await callAiConversation('chat', nextMessages);
+    setChatLoading(false);
+    if (response) {
+      appendAssistantMessage(response.reply);
+      if (response.requiresConfirmation) {
+        const normalized = normalizeDetections(
+          response.detectedRefills || [],
+          response.detectedIngredients || []
+        );
+        if (normalized.length > 0) {
+          setPendingDetections(normalized);
+          setShowDetectionModal(true);
+        }
+      }
+    }
+  };
+
+  const handleDetectRefill = async () => {
+    if (chatLoading || !user) return;
+    const userMessage: ChatMessage = {
+      role: 'user',
+      content: t('analyze.detectRefill'),
+      timestamp: new Date().toISOString()
+    };
+    const nextMessages = [...messages, userMessage];
+    setMessages(nextMessages);
+    setChatLoading(true);
+
+    const response = await callAiConversation('refill', nextMessages);
+    setChatLoading(false);
+    if (response) {
+      appendAssistantMessage(response.reply);
+      const normalized = normalizeDetections(
+        response.detectedRefills || [],
+        response.detectedIngredients || []
+      );
+      if (normalized.length > 0) {
+        setPendingDetections(normalized);
+        setShowDetectionModal(true);
+      }
+    }
+  };
+
+  const handleApproveDetections = () => {
+    if (!pendingDetections || !onApplyDetections) return;
+    onApplyDetections({ refills: pendingDetections });
+    appendAssistantMessage(t('analyze.refillAdded'));
+    setPendingDetections(null);
+    setShowDetectionModal(false);
+  };
+
+  const handleCancelDetections = () => {
+    setPendingDetections(null);
+    setShowDetectionModal(false);
+  };
+
+  const findExistingIngredient = (name: string) =>
+    ingredients.find((i) => i.name.toLowerCase() === name.trim().toLowerCase());
+
+  const normalizeDetections = (
+    refills: DetectedRefill[],
+    ingredientsList: DetectedIngredient[]
+  ): DetectedRefill[] => {
+    const mappedRefills = refills.map((r) => {
+      const existing = findExistingIngredient(r.ingredientName);
+      return {
+        ...r,
+        ingredientName: existing ? existing.name : r.ingredientName,
+        isNewIngredient: existing ? false : (r.isNewIngredient ?? true),
+        category: existing ? existing.category : (r.category || 'Pantry'),
+        unit: existing ? existing.unit : (r.unit || 'g')
+      };
+    });
+
+    const mappedIngredients = ingredientsList.map((i) => ({
+      ingredientName: i.name,
+      quantity: i.currentQty,
+      unit: i.unit || 'g',
+      maxQty: i.maxQty,
+      confidence: i.confidence,
+      category: i.category || 'Pantry',
+      notes: i.notes || '',
+      isNewIngredient: true
+    }));
+
+    return [...mappedRefills, ...mappedIngredients];
+  };
+
+  const updatePendingRefill = (index: number, field: keyof DetectedRefill, value: unknown) => {
+    setPendingDetections((prev) => {
+      if (!prev) return prev;
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+  };
+
+  const handleCreateToggle = (index: number, isNew: boolean) => {
+    setPendingDetections((prev) => {
+      if (!prev) return prev;
+      const next = [...prev];
+      const item = { ...next[index] };
+      item.isNewIngredient = isNew;
+      if (isNew) {
+        // Reset to a new-container default.
+        item.hasThreshold = false;
+        item.maxQty = item.quantity;
+      } else {
+        // Default to the first existing ingredient if any.
+        const existing = ingredients[0];
+        if (existing) {
+          item.ingredientName = existing.name;
+          item.category = existing.category;
+          item.unit = existing.unit;
+        }
+      }
+      next[index] = item;
+      return next;
+    });
+  };
+
+  const handleThresholdToggle = (index: number, enabled: boolean) => {
+    setPendingDetections((prev) => {
+      if (!prev) return prev;
+      const next = [...prev];
+      const item = { ...next[index] };
+      item.hasThreshold = enabled;
+      item.maxQty = enabled ? Math.max(item.quantity, item.maxQty ?? item.quantity) : item.quantity;
+      next[index] = item;
+      return next;
+    });
+  };
 
   const imageUrl = (filename: string) => `/api/images/${user?.id}/${filename}`;
   const latestImage = images[0];
@@ -575,9 +865,9 @@ export default function AnalyzeScreen({ user, isDemo = false }: AnalyzeScreenPro
 
           {/* Detail view */}
           {galleryMode === 'detail' && selectedImage && (
-            <div className="flex-1 flex flex-col p-4 overflow-y-auto">
+            <div className="flex-1 flex flex-col p-4 overflow-hidden">
               <div
-                className="flex-1 flex items-center justify-center mb-4 touch-pan-y"
+                className="flex-1 min-h-0 flex items-center justify-center mb-4 touch-pan-y"
                 onPointerDown={handleDetailPointerDown}
                 onPointerMove={handleDetailPointerMove}
                 onPointerUp={handleDetailPointerUp}
@@ -595,30 +885,336 @@ export default function AnalyzeScreen({ user, isDemo = false }: AnalyzeScreenPro
                 />
               </div>
 
-              <div className="flex flex-col gap-3">
+              {/* Foldable AI conversation drawer */}
+              <div className="shrink-0 border-t border-neutral-800 bg-neutral-900/60 backdrop-blur-sm rounded-lg overflow-hidden">
                 <button
-                  onClick={handleAiDetect}
-                  disabled={aiLoading}
-                  className="w-full py-3 bg-[#00f0ff] text-black hover:bg-[#00dbe9] disabled:opacity-60 rounded text-xs font-mono font-bold tracking-wider uppercase transition-colors pointer-events-auto flex items-center justify-center gap-2"
+                  onClick={() => setConversationOpen((prev) => !prev)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-[#fcf9f8] hover:bg-neutral-800/50 transition-colors pointer-events-auto"
                 >
-                  {aiLoading ? (
-                    <>
-                      <Loader2 size={14} className="animate-spin" />
-                      {t('analyze.aiDetecting')}
-                    </>
-                  ) : (
-                    t('analyze.aiDetect')
-                  )}
+                  <span className="text-xs font-mono font-bold tracking-wider uppercase">
+                    {t('analyze.aiAssistant')}
+                  </span>
+                  {conversationOpen ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
                 </button>
 
-                {aiResult && (
-                  <div className="bg-neutral-900 border border-neutral-800 rounded p-3 text-xs text-neutral-200 leading-relaxed">
-                    {aiResult}
+                {conversationOpen && (
+                  <div className="flex flex-col max-h-[45vh]">
+                    <div className="flex items-center justify-between px-3 py-1 border-b border-neutral-800/50">
+                      <span className="text-[10px] font-mono text-neutral-400">
+                        {messages.length} {messages.length === 1 ? t('analyze.message') : t('analyze.messages')}
+                      </span>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={handleClearConversation}
+                          disabled={messages.length === 0}
+                          className="flex items-center gap-1 text-[10px] font-mono text-neutral-400 hover:text-red-400 disabled:opacity-50 transition-colors pointer-events-auto"
+                        >
+                          <X size={12} />
+                          {t('analyze.clearChat')}
+                        </button>
+                        <button
+                          onClick={saveConversation}
+                          disabled={saveStatus === 'saving' || messages.length === 0}
+                          className="flex items-center gap-1 text-[10px] font-mono text-[#00f0ff] hover:text-white disabled:opacity-50 transition-colors pointer-events-auto"
+                        >
+                          {saveStatus === 'saving' ? (
+                            <Loader2 size={12} className="animate-spin" />
+                          ) : (
+                            <Save size={12} />
+                          )}
+                          {saveStatus === 'saved'
+                            ? t('analyze.conversationSaved')
+                            : t('analyze.saveConversation')}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2 min-h-0">
+                      {messages.length === 0 && (
+                        <p className="text-xs text-neutral-500 text-center py-4 font-mono">
+                          {t('analyze.askAi')}
+                        </p>
+                      )}
+                      {messages.map((msg, idx) => (
+                        <div
+                          key={idx}
+                          className={`flex ${
+                            msg.role === 'user' ? 'justify-end' : 'justify-start'
+                          }`}
+                        >
+                          <div
+                            className={`max-w-[85%] rounded px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap ${
+                              msg.role === 'user'
+                                ? 'bg-[#00f0ff] text-black'
+                                : 'bg-neutral-800 text-neutral-100 border border-neutral-700'
+                            }`}
+                          >
+                            {msg.content}
+                          </div>
+                        </div>
+                      ))}
+                      {chatLoading && (
+                        <div className="flex justify-start">
+                          <div className="bg-neutral-800 border border-neutral-700 rounded px-3 py-2 flex items-center gap-2">
+                            <Loader2 size={12} className="animate-spin text-[#00f0ff]" />
+                            <span className="text-xs text-neutral-300 font-mono">
+                              {t('analyze.aiDetecting')}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      <div ref={messagesEndRef} />
+                    </div>
+
+                    <div className="p-3 border-t border-neutral-800/50 space-y-2">
+                      <button
+                        onClick={handleDetectRefill}
+                        disabled={chatLoading}
+                        className="w-full py-2 bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50 text-[#00f0ff] rounded text-xs font-mono font-bold tracking-wider uppercase transition-colors pointer-events-auto flex items-center justify-center gap-2"
+                      >
+                        {chatLoading ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : null}
+                        {t('analyze.detectRefill')}
+                      </button>
+
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={chatInput}
+                          onChange={(e) => setChatInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSendChat();
+                          }}
+                          placeholder={t('analyze.askAi')}
+                          disabled={chatLoading}
+                          className="flex-1 bg-neutral-900 border border-neutral-700 rounded px-3 py-2 text-xs text-[#fcf9f8] placeholder:text-neutral-500 focus:outline-none focus:border-[#00f0ff] transition-colors"
+                        />
+                        <button
+                          onClick={handleSendChat}
+                          disabled={chatLoading || !chatInput.trim()}
+                          className="p-2 bg-[#00f0ff] text-black rounded hover:bg-[#00dbe9] disabled:opacity-50 transition-colors pointer-events-auto"
+                        >
+                          <Send size={14} />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Detection confirmation modal */}
+      {showDetectionModal && pendingDetections && (
+        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 pointer-events-auto">
+          <div className="w-full max-w-md max-h-[80vh] bg-neutral-900 border border-neutral-800 rounded-lg flex flex-col shadow-2xl">
+            <div className="px-4 py-3 border-b border-neutral-800 flex items-center justify-between">
+              <h3 className="text-sm font-mono font-bold tracking-wider uppercase text-[#fcf9f8]">
+                {t('analyze.detectedRefills')}
+              </h3>
+              <button
+                onClick={handleCancelDetections}
+                className="text-neutral-400 hover:text-[#00f0ff] transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {pendingDetections.length === 0 && (
+                <p className="text-xs text-neutral-400 text-center font-mono">
+                  {t('analyze.noDetections')}
+                </p>
+              )}
+
+              {pendingDetections.map((item, idx) => {
+                const isNew = item.isNewIngredient !== false;
+                return (
+                  <div
+                    key={idx}
+                    className="bg-neutral-800/50 border border-neutral-700 rounded p-3 space-y-3"
+                  >
+                    {/* Create-new toggle */}
+                    <label className="inline-flex items-center cursor-pointer pointer-events-auto">
+                      <input
+                        type="checkbox"
+                        checked={isNew}
+                        onChange={(e) => handleCreateToggle(idx, e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="relative w-9 h-5 bg-neutral-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#00f0ff]" />
+                      <span className="ml-2 text-xs font-mono text-neutral-300">
+                        {t('analyze.createNewContainer')}
+                      </span>
+                    </label>
+
+                    {isNew ? (
+                      <div>
+                        <label className="block text-[10px] font-mono text-neutral-400 uppercase mb-1">
+                          {t('analyze.newIngredient')}
+                        </label>
+                        <input
+                          type="text"
+                          value={item.ingredientName}
+                          onChange={(e) =>
+                            updatePendingRefill(idx, 'ingredientName', e.target.value)
+                          }
+                          className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-xs text-[#fcf9f8] focus:border-[#00f0ff] focus:outline-none"
+                        />
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="block text-[10px] font-mono text-neutral-400 uppercase mb-1">
+                          {t('analyze.existingContainer')}
+                        </label>
+                        <select
+                          value={item.ingredientName}
+                          onChange={(e) => {
+                            const existing = ingredients.find((i) => i.name === e.target.value);
+                            if (existing) {
+                              setPendingDetections((prev) => {
+                                if (!prev) return prev;
+                                const next = [...prev];
+                                next[idx] = {
+                                  ...next[idx],
+                                  ingredientName: existing.name,
+                                  category: existing.category,
+                                  unit: existing.unit
+                                };
+                                return next;
+                              });
+                            }
+                          }}
+                          className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-xs text-[#fcf9f8] focus:border-[#00f0ff] focus:outline-none"
+                        >
+                          {ingredients.map((ing) => (
+                            <option key={ing.id} value={ing.name}>
+                              {ing.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-mono text-neutral-400 uppercase mb-1">
+                          {t('inventory.table.qtyAdded')}
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={item.quantity}
+                          onChange={(e) =>
+                            updatePendingRefill(idx, 'quantity', parseFloat(e.target.value) || 0)
+                          }
+                          className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-xs text-[#fcf9f8] focus:border-[#00f0ff] focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-mono text-neutral-400 uppercase mb-1">
+                          {t('analyze.labelUnit')}
+                        </label>
+                        <select
+                          value={item.unit}
+                          onChange={(e) => updatePendingRefill(idx, 'unit', e.target.value)}
+                          disabled={!isNew}
+                          className="w-full bg-neutral-900 border border-neutral-700 disabled:bg-neutral-900/50 disabled:text-neutral-300 rounded px-2 py-1 text-xs text-[#fcf9f8] focus:border-[#00f0ff] focus:outline-none"
+                        >
+                          <option value="g">g</option>
+                          <option value="ml">ml</option>
+                          <option value="pcs">pcs</option>
+                          <option value="%">%</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {isNew && (
+                      <>
+                        {/* Capacity threshold toggle */}
+                        <label className="inline-flex items-center cursor-pointer pointer-events-auto">
+                          <input
+                            type="checkbox"
+                            checked={item.hasThreshold === true}
+                            onChange={(e) => handleThresholdToggle(idx, e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="relative w-9 h-5 bg-neutral-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#00f0ff]" />
+                          <span className="ml-2 text-xs font-mono text-neutral-300">
+                            {t('analyze.setCapacity')}
+                          </span>
+                        </label>
+
+                        {item.hasThreshold === true && (
+                          <div>
+                            <label className="block text-[10px] font-mono text-neutral-400 uppercase mb-1">
+                              {t('analyze.capacity')}
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={item.maxQty ?? item.quantity}
+                              onChange={(e) =>
+                                updatePendingRefill(
+                                  idx,
+                                  'maxQty',
+                                  e.target.value === '' ? undefined : parseFloat(e.target.value)
+                                )
+                              }
+                              className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-xs text-[#fcf9f8] focus:border-[#00f0ff] focus:outline-none"
+                            />
+                          </div>
+                        )}
+
+                        <div>
+                          <label className="block text-[10px] font-mono text-neutral-400 uppercase mb-1">
+                            {t('analyze.labelCategory')}
+                          </label>
+                          <input
+                            type="text"
+                            value={item.category || ''}
+                            onChange={(e) => updatePendingRefill(idx, 'category', e.target.value)}
+                            className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-xs text-[#fcf9f8] focus:border-[#00f0ff] focus:outline-none"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    <div>
+                      <label className="block text-[10px] font-mono text-neutral-400 uppercase mb-1">
+                        {t('analyze.labelNotes')}
+                      </label>
+                      <input
+                        type="text"
+                        value={item.notes || ''}
+                        onChange={(e) => updatePendingRefill(idx, 'notes', e.target.value)}
+                        className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-xs text-[#fcf9f8] focus:border-[#00f0ff] focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="p-4 border-t border-neutral-800 flex items-center justify-end gap-2">
+              <button
+                onClick={handleCancelDetections}
+                className="px-4 py-2 text-xs font-mono text-[#fcf9f8] hover:text-[#00f0ff] transition-colors"
+              >
+                {t('analyze.cancelDetections')}
+              </button>
+              <button
+                onClick={handleApproveDetections}
+                disabled={pendingDetections.length === 0}
+                className="px-4 py-2 bg-[#00f0ff] text-black rounded text-xs font-mono font-bold tracking-wider uppercase hover:bg-[#00dbe9] disabled:opacity-50 transition-colors"
+              >
+                {t('analyze.approve')}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

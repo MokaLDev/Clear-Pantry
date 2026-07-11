@@ -1,6 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Ingredient } from '../types';
-import { AlertTriangle, ShieldCheck, Thermometer, ChevronRight, CheckCircle, FlameKindling, UtensilsCrossed } from 'lucide-react';
+import {
+  AlertTriangle,
+  ShieldCheck,
+  Thermometer,
+  ChevronRight,
+  CheckCircle,
+  FlameKindling,
+  UtensilsCrossed,
+  Trash2,
+  X,
+  ChevronLeft,
+  Edit3,
+  Loader2,
+  RefreshCw
+} from 'lucide-react';
 import { useI18n } from '../i18n';
 
 interface HomeScreenProps {
@@ -10,19 +24,147 @@ interface HomeScreenProps {
   onNavigateToTab: (tab: string) => void;
   darkMode: boolean;
   isDemo?: boolean;
+  adviceLoading?: boolean;
+  onUpdateIngredient?: (ingredient: Ingredient) => void;
+  onDeleteIngredient?: (id: string) => void;
 }
 
-export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, onNavigateToTab, darkMode, isDemo = false }: HomeScreenProps) {
+export default function HomeScreen({
+  ingredients,
+  dietAdvice,
+  onRefreshAdvice,
+  onNavigateToTab,
+  darkMode,
+  isDemo = false,
+  adviceLoading = false,
+  onUpdateIngredient,
+  onDeleteIngredient
+}: HomeScreenProps) {
   const [dismissed, setDismissed] = useState(false);
   const [showPlanModal, setShowPlanModal] = useState(false);
   const { t } = useI18n();
 
-  const criticalItems = ingredients.filter((i) => i.status === 'critical');
+  // Container list swipe-to-delete state
+  const [swipeOffsets, setSwipeOffsets] = useState<Record<string, number>>({});
+  const [exitingId, setExitingId] = useState<string | null>(null);
+  const swipeRef = useRef<{ id: string; startX: number; startOffset: number } | null>(null);
+  const pointerMoved = useRef(false);
+  const DELETE_WIDTH = 64;
+  const DELETE_EXTRA = 56;
+  const DELETE_TRIGGER = -(DELETE_WIDTH + DELETE_EXTRA);
+  const MAX_DRAG = DELETE_WIDTH + DELETE_EXTRA * 2;
+
+  // Full-screen container editor state
+  const [editingIngredient, setEditingIngredient] = useState<Ingredient | null>(null);
+  const [editForm, setEditForm] = useState<Partial<Ingredient>>({});
+  const [hasThreshold, setHasThreshold] = useState(false);
+
+  const criticalItems: Ingredient[] = [];
   const eggsItem = ingredients.find((i) => i.id === 'organic-eggs') || { currentQty: 6, maxQty: 12, percentage: 50 };
   const riceItem = ingredients.find((i) => i.id === 'basmati-rice') || { currentQty: 4600, maxQty: 5000, percentage: 92 };
 
   const totalFreshness = ingredients.reduce((acc, curr) => acc + curr.freshness, 0);
   const averageFreshness = Math.round(totalFreshness / ingredients.length) || (isDemo ? 80 : 0);
+
+  // Reset swipe offsets when ingredient list changes
+  useEffect(() => {
+    setSwipeOffsets({});
+  }, [ingredients.length]);
+
+  // Swipe-to-delete handlers
+  const handlePointerStart = (id: string, clientX: number) => {
+    swipeRef.current = { id, startX: clientX, startOffset: swipeOffsets[id] || 0 };
+    setSwipeOffsets((prev) => {
+      const next: Record<string, number> = {};
+      Object.keys(prev).forEach((k) => {
+        if (k !== id) next[k] = 0;
+      });
+      next[id] = prev[id] || 0;
+      return next;
+    });
+  };
+
+  const handlePointerMove = (id: string, clientX: number) => {
+    if (!swipeRef.current || swipeRef.current.id !== id) return;
+    const delta = clientX - swipeRef.current.startX;
+    const raw = swipeRef.current.startOffset + delta;
+    const clamped = Math.max(-MAX_DRAG, Math.min(0, raw));
+    setSwipeOffsets((prev) => ({ ...prev, [id]: clamped }));
+  };
+
+  const handlePointerEnd = (id: string, clientX: number) => {
+    if (!swipeRef.current || swipeRef.current.id !== id) return;
+    const delta = clientX - swipeRef.current.startX;
+    const startOffset = swipeRef.current.startOffset;
+    const current = swipeOffsets[id] || 0;
+
+    if (current <= DELETE_TRIGGER) {
+      animateDelete(id);
+    } else if (Math.abs(delta) < 5 && startOffset !== 0) {
+      setSwipeOffsets((prev) => ({ ...prev, [id]: 0 }));
+    } else {
+      const snapped = current < -DELETE_WIDTH / 2 ? -DELETE_WIDTH : 0;
+      setSwipeOffsets((prev) => ({ ...prev, [id]: snapped }));
+    }
+    swipeRef.current = null;
+  };
+
+  const animateDelete = (id: string) => {
+    setExitingId(id);
+    setTimeout(() => {
+      onDeleteIngredient?.(id);
+      setExitingId(null);
+      setSwipeOffsets((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    }, 250);
+  };
+
+  // Container editor helpers
+  const openEditor = (item: Ingredient) => {
+    setEditingIngredient(item);
+    setEditForm({ ...item });
+    setHasThreshold(item.hasThreshold ?? true);
+  };
+
+  const closeEditor = () => {
+    setEditingIngredient(null);
+    setEditForm({});
+    setHasThreshold(false);
+  };
+
+  const saveIngredient = () => {
+    if (!editingIngredient || !onUpdateIngredient) return;
+    const currentQty = Number(editForm.currentQty) ?? editingIngredient.currentQty;
+    const maxQty = hasThreshold
+      ? Number(editForm.maxQty) ?? editingIngredient.maxQty
+      : currentQty;
+    const safeMaxQty = Math.max(0, maxQty);
+    const safeCurrentQty = Math.max(0, hasThreshold ? Math.min(currentQty, safeMaxQty) : currentQty);
+    const percentage = hasThreshold && safeMaxQty > 0
+      ? Math.round((safeCurrentQty / safeMaxQty) * 100)
+      : 100;
+    const status: Ingredient['status'] =
+      percentage >= 60 ? 'normal' : percentage >= 30 ? 'stable' : 'critical';
+
+    onUpdateIngredient({
+      ...editingIngredient,
+      ...editForm,
+      currentQty: safeCurrentQty,
+      maxQty: safeMaxQty,
+      hasThreshold,
+      percentage,
+      status,
+      lastUpdated: new Date().toISOString()
+    } as Ingredient);
+    closeEditor();
+  };
+
+  const updateField = <K extends keyof Ingredient>(field: K, value: Ingredient[K]) => {
+    setEditForm((prev) => ({ ...prev, [field]: value }));
+  };
 
   return (
     <div className={`w-full flex-1 flex flex-col font-sans overflow-y-auto pb-24 transition-colors duration-300 ${
@@ -146,74 +288,34 @@ export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, o
         </div>
 
         {/* Dietary Advice */}
-        {isDemo ? (
-          !dismissed ? (
-            <div className={`border rounded p-5 relative overflow-hidden transition-colors duration-300 ${
-              darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-[#f3f0ef] border-[#e5e2e1]'
-            }`}>
-              <span className={`text-[10px] font-mono tracking-[0.15em] font-bold block mb-2 uppercase ${
-                darkMode ? 'text-[#00f0ff]' : 'text-[#006970]'
-              }`}>
-                {t('home.dietaryAdvice')}
-              </span>
-              <p className="text-sm font-semibold leading-relaxed mb-4 max-w-[90%]">
-                "{dietAdvice}"
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowPlanModal(true)}
-                  className={`px-4 py-2 text-[11px] font-mono tracking-wider font-semibold transition-all rounded ${
-                    darkMode ? 'bg-[#00f0ff] text-black hover:bg-[#00dbe9]' : 'bg-[#1c1b1b] text-[#fcf9f8] hover:bg-black'
-                  }`}
-                >
-                  {t('home.viewPlan')}
-                </button>
-                <button
-                  onClick={() => setDismissed(true)}
-                  className={`px-4 py-2 border text-[11px] font-mono tracking-wider font-semibold transition-all rounded ${
-                    darkMode
-                      ? 'border-neutral-700 text-neutral-300 hover:bg-neutral-800'
-                      : 'border-[#b9cacb]/50 text-[#3b494b] hover:bg-[#ebe7e7]'
-                  }`}
-                >
-                  {t('home.dismiss')}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className={`flex justify-between items-center p-3 rounded border border-dashed transition-colors duration-300 ${
-              darkMode
-                ? 'bg-neutral-900/40 border-neutral-800'
-                : 'bg-[#ebe7e7]/40 border-[#b9cacb]/40'
-            }`}>
-              <span className={`text-xs italic ${darkMode ? 'text-neutral-400' : 'text-[#3b494b]'}`}>{t('home.adviceDismissed')}</span>
-              <button
-                onClick={() => {
-                  onRefreshAdvice();
-                  setDismissed(false);
-                }}
-                className={`text-xs font-mono font-semibold hover:underline ${
-                  darkMode ? 'text-[#00f0ff]' : 'text-[#006970]'
-                }`}
-              >
-                {t('home.refreshAndRestore')}
-              </button>
-            </div>
-          )
-        ) : (
-          <div className={`border rounded p-5 relative overflow-hidden transition-colors duration-300 ${
-            darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-[#f3f0ef] border-[#e5e2e1]'
-          }`}>
-            <span className={`text-[10px] font-mono tracking-[0.15em] font-bold block mb-2 uppercase ${
+        <div className={`border rounded p-5 relative overflow-hidden transition-colors duration-300 ${
+          darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-[#f3f0ef] border-[#e5e2e1]'
+        }`}>
+          <div className="flex items-center justify-between mb-2">
+            <span className={`text-[10px] font-mono tracking-[0.15em] font-bold uppercase ${
               darkMode ? 'text-[#00f0ff]' : 'text-[#006970]'
             }`}>
               {t('home.dietaryAdvice')}
             </span>
-            <p className={`text-sm leading-relaxed mb-1 max-w-[90%] ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
-              {t('home.noAdvice')}
-            </p>
+            <button
+              onClick={onRefreshAdvice}
+              disabled={adviceLoading}
+              className={`flex items-center gap-1 text-[10px] font-mono font-semibold transition-colors pointer-events-auto ${
+                darkMode ? 'text-[#00f0ff] hover:text-white' : 'text-[#006970] hover:text-[#1c1b1b]'
+              } disabled:opacity-50`}
+            >
+              {adviceLoading ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <RefreshCw size={12} />
+              )}
+              {t('home.regenerateAdvice')}
+            </button>
           </div>
-        )}
+          <p className={`text-sm leading-relaxed max-w-[90%] ${darkMode ? 'text-neutral-200' : 'text-[#1c1b1b]'}`}>
+            {adviceLoading && !dietAdvice ? t('home.generatingAdvice') : dietAdvice || t('home.noAdvice')}
+          </p>
+        </div>
 
         {/* Consumption Trends & Freshness Score */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -272,6 +374,110 @@ export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, o
               </p>
             </div>
           </div>
+        </div>
+
+        {/* Containers configuration */}
+        <div className={`border rounded p-5 shadow-sm transition-colors duration-300 ${
+          darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-[#e5e2e1]'
+        }`}>
+          <h3 className={`text-xs font-mono tracking-wider mb-4 uppercase ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
+            {t('home.containers')}
+          </h3>
+          {ingredients.length > 0 ? (
+            <div className="space-y-3">
+              {ingredients.map((item, idx) => {
+                const offset = swipeOffsets[item.id] || 0;
+                const isExiting = exitingId === item.id;
+                const bgWidth = offset < 0 ? Math.min(-offset, MAX_DRAG) : 0;
+                return (
+                  <div
+                    key={item.id}
+                    className={`relative overflow-hidden rounded transition-all duration-300 ${
+                      isExiting ? 'opacity-0 -translate-x-full' : 'opacity-100'
+                    } ${idx !== 0 ? 'mt-3' : ''}`}
+                  >
+                    {/* Delete background */}
+                    <button
+                      onClick={() => animateDelete(item.id)}
+                      className={`absolute inset-y-0 right-0 flex items-center justify-center text-white ${
+                        darkMode ? 'bg-red-900/80' : 'bg-[#ba1a1a]'
+                      }`}
+                      style={{
+                        width: `${bgWidth}px`,
+                        transition: swipeRef.current?.id === item.id ? 'none' : 'width 200ms ease-out'
+                      }}
+                      aria-label={t('inventory.deleteRefill')}
+                    >
+                      <Trash2 size={18} />
+                    </button>
+
+                    {/* Swipeable card */}
+                    <div
+                      className={`relative flex items-center justify-between gap-4 p-3 rounded cursor-pointer pointer-events-auto touch-pan-y ${
+                        darkMode ? 'bg-neutral-800' : 'bg-[#f3f0ef]'
+                      }`}
+                      style={{
+                        transform: `translateX(${offset}px)`,
+                        transition: swipeRef.current?.id === item.id ? 'none' : 'transform 200ms ease-out'
+                      }}
+                      onPointerDown={(e) => {
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                        pointerMoved.current = false;
+                        handlePointerStart(item.id, e.clientX);
+                      }}
+                      onPointerMove={(e) => {
+                        if (swipeRef.current && swipeRef.current.id === item.id) {
+                          const delta = Math.abs(e.clientX - swipeRef.current.startX);
+                          if (delta > 5) pointerMoved.current = true;
+                        }
+                        handlePointerMove(item.id, e.clientX);
+                      }}
+                      onPointerUp={(e) => handlePointerEnd(item.id, e.clientX)}
+                      onPointerLeave={(e) => handlePointerEnd(item.id, e.clientX)}
+                      onClick={() => {
+                        if (pointerMoved.current) {
+                          pointerMoved.current = false;
+                          return;
+                        }
+                        if ((swipeOffsets[item.id] || 0) === 0) openEditor(item);
+                      }}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-8 h-8 rounded flex items-center justify-center text-lg shrink-0 ${darkMode ? 'bg-neutral-700' : 'bg-[#e5e2e1]'}`}>
+                          {item.category === 'Fridge' ? '🧊' : '🥫'}
+                        </div>
+                        <div className="min-w-0">
+                          <h5 className="text-xs font-bold truncate">{item.name}</h5>
+                          <span className={`text-[10px] ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
+                            {t('home.itemRemaining', { qty: item.currentQty, unit: item.unit })}
+                            {item.maxQty > item.currentQty ? ` / ${item.maxQty}${item.unit}` : ''}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className={`w-24 h-1.5 rounded-full overflow-hidden ${darkMode ? 'bg-neutral-700' : 'bg-[#e5e2e1]'}`}>
+                          <div
+                            className={`h-full ${item.status === 'critical' ? 'bg-red-500' : darkMode ? 'bg-[#00f0ff]' : 'bg-[#006970]'}`}
+                            style={{ width: `${Math.min(100, item.percentage)}%` }}
+                          />
+                        </div>
+                        <span className="text-[11px] font-mono min-w-[28px] text-right">
+                          {item.percentage}%
+                        </span>
+                        <Edit3 size={12} className={`${darkMode ? 'text-neutral-500' : 'text-[#9ca3af]'}`} />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className={`flex items-center justify-center h-20 rounded ${darkMode ? 'bg-neutral-950/50' : 'bg-[#fcf9f8]'}`}>
+              <span className={`text-[11px] ${darkMode ? 'text-neutral-500' : 'text-[#9ca3af]'}`}>
+                {t('home.noUsageData')}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Recent Ingredient Usage */}
@@ -374,6 +580,188 @@ export default function HomeScreen({ ingredients, dietAdvice, onRefreshAdvice, o
           <ChevronRight size={12} />
         </div>
       </div>
+
+      {/* Full-screen container editor */}
+      {editingIngredient && (
+        <div className={`fixed inset-0 z-50 flex flex-col transition-colors duration-300 ${
+          darkMode ? 'bg-[#121212] text-white' : 'bg-[#fcf9f8] text-[#1c1b1b]'
+        }`}>
+          {/* Editor header */}
+          <div className={`flex items-center justify-between px-4 py-3 border-b ${
+            darkMode ? 'border-neutral-800' : 'border-[#e5e2e1]'
+          }`}>
+            <button
+              onClick={closeEditor}
+              className="flex items-center gap-1 text-xs font-mono hover:text-[#00f0ff] transition-colors pointer-events-auto"
+            >
+              <ChevronLeft size={18} />
+              {t('home.cancel')}
+            </button>
+            <h3 className="text-sm font-mono font-bold tracking-wider uppercase">
+              {t('home.containerSettings')}
+            </h3>
+            <button
+              onClick={() => {
+                if (window.confirm(t('home.deleteContainerConfirm', { name: editForm.name }))) {
+                  onDeleteIngredient?.(editingIngredient.id);
+                  closeEditor();
+                }
+              }}
+              className="p-2 text-red-500 hover:text-red-400 transition-colors pointer-events-auto"
+            >
+              <Trash2 size={18} />
+            </button>
+          </div>
+
+          {/* Editor form */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-5">
+            <div>
+              <label className={`block text-[10px] font-mono uppercase mb-1 ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
+                {t('home.containerName')}
+              </label>
+              <input
+                type="text"
+                value={editForm.name || ''}
+                onChange={(e) => updateField('name', e.target.value)}
+                className={`w-full border rounded px-3 py-2 text-sm focus:outline-none focus:border-[#00f0ff] transition-colors ${
+                  darkMode ? 'bg-neutral-900 border-neutral-700 text-white' : 'bg-white border-[#e5e2e1] text-[#1c1b1b]'
+                }`}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={`block text-[10px] font-mono uppercase mb-1 ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
+                  {t('home.currentQty')}
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={editForm.currentQty ?? 0}
+                  onChange={(e) => updateField('currentQty', parseFloat(e.target.value) || 0)}
+                  className={`w-full border rounded px-3 py-2 text-sm focus:outline-none focus:border-[#00f0ff] transition-colors ${
+                    darkMode ? 'bg-neutral-900 border-neutral-700 text-white' : 'bg-white border-[#e5e2e1] text-[#1c1b1b]'
+                  }`}
+                />
+              </div>
+              <div>
+                <label className={`block text-[10px] font-mono uppercase mb-1 ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
+                  {t('analyze.labelUnit')}
+                </label>
+                <select
+                  value={editForm.unit || 'g'}
+                  onChange={(e) => updateField('unit', e.target.value)}
+                  className={`w-full border rounded px-3 py-2 text-sm focus:outline-none focus:border-[#00f0ff] transition-colors ${
+                    darkMode ? 'bg-neutral-900 border-neutral-700 text-white' : 'bg-white border-[#e5e2e1] text-[#1c1b1b]'
+                  }`}
+                >
+                  <option value="g">g</option>
+                  <option value="ml">ml</option>
+                  <option value="pcs">pcs</option>
+                  <option value="%">%</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Threshold toggle */}
+            <div className={`border rounded p-4 space-y-4 ${darkMode ? 'border-neutral-800 bg-neutral-900/50' : 'border-[#e5e2e1] bg-[#f3f0ef]'}`}>
+              <label className="inline-flex items-center cursor-pointer pointer-events-auto">
+                <input
+                  type="checkbox"
+                  checked={hasThreshold}
+                  onChange={(e) => {
+                    const enabled = e.target.checked;
+                    setHasThreshold(enabled);
+                    if (!enabled) {
+                      updateField('maxQty', editForm.currentQty ?? 0);
+                    }
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="relative w-9 h-5 bg-neutral-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#00f0ff]" />
+                <span className={`ml-2 text-xs font-mono ${darkMode ? 'text-neutral-300' : 'text-[#3b494b]'}`}>
+                  {t('home.setCapacityThreshold')}
+                </span>
+              </label>
+
+              {hasThreshold && (
+                <div>
+                  <label className={`block text-[10px] font-mono uppercase mb-1 ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
+                    {t('home.maxQty')}
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={editForm.maxQty ?? 0}
+                    onChange={(e) => updateField('maxQty', parseFloat(e.target.value) || 0)}
+                    className={`w-full border rounded px-3 py-2 text-sm focus:outline-none focus:border-[#00f0ff] transition-colors ${
+                      darkMode ? 'bg-neutral-900 border-neutral-700 text-white' : 'bg-white border-[#e5e2e1] text-[#1c1b1b]'
+                    }`}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className={`block text-[10px] font-mono uppercase mb-1 ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
+                {t('analyze.labelCategory')}
+              </label>
+              <input
+                type="text"
+                value={editForm.category || ''}
+                onChange={(e) => updateField('category', e.target.value)}
+                className={`w-full border rounded px-3 py-2 text-sm focus:outline-none focus:border-[#00f0ff] transition-colors ${
+                  darkMode ? 'bg-neutral-900 border-neutral-700 text-white' : 'bg-white border-[#e5e2e1] text-[#1c1b1b]'
+                }`}
+              />
+            </div>
+
+            <div>
+              <label className={`block text-[10px] font-mono uppercase mb-1 ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
+                {t('home.freshness')}
+              </label>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={editForm.freshness ?? 100}
+                onChange={(e) => updateField('freshness', parseInt(e.target.value, 10))}
+                className="w-full"
+              />
+              <div className="text-right text-xs font-mono mt-1">{editForm.freshness ?? 100}%</div>
+            </div>
+
+            <div>
+              <label className={`block text-[10px] font-mono uppercase mb-1 ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
+                {t('home.spoilageRisk')}
+              </label>
+              <select
+                value={editForm.spoilageRisk || 'Low'}
+                onChange={(e) => updateField('spoilageRisk', e.target.value as Ingredient['spoilageRisk'])}
+                className={`w-full border rounded px-3 py-2 text-sm focus:outline-none focus:border-[#00f0ff] transition-colors ${
+                  darkMode ? 'bg-neutral-900 border-neutral-700 text-white' : 'bg-white border-[#e5e2e1] text-[#1c1b1b]'
+                }`}
+              >
+                <option value="Low">{t('common.risk.low')}</option>
+                <option value="Medium">{t('common.risk.medium')}</option>
+                <option value="High">{t('common.risk.high')}</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Save button */}
+          <div className={`p-4 border-t ${darkMode ? 'border-neutral-800' : 'border-[#e5e2e1]'}`}>
+            <button
+              onClick={saveIngredient}
+              className={`w-full py-3 rounded text-xs font-mono font-bold tracking-wider uppercase transition-colors ${
+                darkMode ? 'bg-[#00f0ff] text-black hover:bg-[#00dbe9]' : 'bg-[#1c1b1b] text-[#fcf9f8] hover:bg-black'
+              }`}
+            >
+              {t('home.save')}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Plan Details Modal - demo only */}
       {isDemo && showPlanModal && (

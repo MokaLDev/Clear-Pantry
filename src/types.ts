@@ -11,6 +11,7 @@ export interface Ingredient {
   spoilageRisk: 'High' | 'Medium' | 'Low';
   lastUpdated: string;
   isCustom?: boolean;
+  hasThreshold?: boolean; // false = no capacity limit, quantity is tracked but not capped
 }
 
 export interface RefillRecord {
@@ -48,4 +49,77 @@ export interface KitchenData {
   ingredients: Ingredient[];
   refills: RefillRecord[];
   config: UserConfig;
+}
+
+// ---------------------------------------------------------------------------
+// AI conversation & structured detection types
+// ---------------------------------------------------------------------------
+
+export type ChatRole = 'user' | 'assistant' | 'system';
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp?: string;
+}
+
+export interface DetectedRefill {
+  ingredientName: string;
+  quantity: number;
+  unit: 'g' | 'ml' | 'pcs' | '%' | string;
+  maxQty?: number;
+  hasThreshold?: boolean;
+  confidence?: number;
+  category?: string;
+  notes?: string;
+  isNewIngredient?: boolean;
+}
+
+export interface DetectedIngredient {
+  name: string;
+  category: string;
+  currentQty: number;
+  maxQty: number;
+  unit: 'g' | 'ml' | 'pcs' | '%' | string;
+  freshness?: number;
+  spoilageRisk?: 'High' | 'Medium' | 'Low';
+  confidence?: number;
+  notes?: string;
+}
+
+export type AiActionType =
+  | 'add_refill'
+  | 'create_ingredient'
+  | 'update_ingredient'
+  | 'delete_ingredient'
+  | 'log_consumption'
+  | 'custom';
+
+export interface AiAction {
+  type: AiActionType;
+  payload?: Record<string, unknown>;
+}
+
+export interface AiAssistantResponse {
+  version: string;
+  reply: string;
+  requiresConfirmation?: boolean;
+  detectedRefills?: DetectedRefill[];
+  detectedIngredients?: DetectedIngredient[];
+  actions?: AiAction[];
+}
+
+export interface SavedConversation {
+  id: string;
+  imageFilename: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: ChatMessage[];
+}
+
+export interface ConversationListItem {
+  id: string;
+  imageFilename: string;
+  excerpt: string;
+  updatedAt: string;
 }

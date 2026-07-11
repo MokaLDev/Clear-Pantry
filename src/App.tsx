@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { UserConfig, User, KitchenData } from './types';
+import { UserConfig, User, KitchenData, Ingredient, DetectedRefill, DetectedIngredient } from './types';
 import { INITIAL_INGREDIENTS, INITIAL_REFILLS, DIETARY_ADVICE_POOL } from './data/defaultIngredients';
 import WelcomeScreen from './components/WelcomeScreen';
 import LoginScreen from './components/LoginScreen';
@@ -110,27 +110,50 @@ export default function App() {
     };
   }, [currentUser]);
 
-  // Derive dietary advice from config.
-  useEffect(() => {
-    const query = config.reportGenerationLogic.toLowerCase();
-    if (query.includes('protein') || query.includes('high-protein')) {
-      setDietAdvice(translate(config.language, 'dietAdvice.protein'));
-    } else if (query.includes('expiration') || query.includes('date') || query.includes('spoil') || query.includes('fresh')) {
-      setDietAdvice(translate(config.language, 'dietAdvice.fresh'));
-    } else if (query.includes('carb') || query.includes('rice') || query.includes('energy')) {
-      setDietAdvice(translate(config.language, 'dietAdvice.carb'));
-    } else if (query.includes('waste') || query.includes('low') || query.includes('cheap')) {
-      setDietAdvice(translate(config.language, 'dietAdvice.waste'));
-    } else {
-      const pool = [
-        translate(config.language, 'dietAdvice.greens'),
-        translate(config.language, 'dietAdvice.spoilage'),
-        translate(config.language, 'dietAdvice.highProtein'),
-        translate(config.language, 'dietAdvice.lowStock')
-      ];
-      setDietAdvice(pool[Math.floor(Math.random() * pool.length)]);
+  const [dietAdviceLoading, setDietAdviceLoading] = useState(false);
+
+  const fallbackAdvice = () => {
+    const pool = [
+      translate(config.language, 'dietAdvice.greens'),
+      translate(config.language, 'dietAdvice.spoilage'),
+      translate(config.language, 'dietAdvice.highProtein'),
+      translate(config.language, 'dietAdvice.lowStock')
+    ];
+    return pool[Math.floor(Math.random() * pool.length)];
+  };
+
+  const ADVICE_FOCUSES = ['balanced', 'high-protein', 'quick-meal', 'freshness', 'low-stock', 'zero-waste', 'fiber'];
+
+  const generateDietAdvice = async () => {
+    if (!currentUser) return;
+    setDietAdviceLoading(true);
+    try {
+      const focus = ADVICE_FOCUSES[Math.floor(Math.random() * ADVICE_FOCUSES.length)];
+      const res = await fetch(`/api/diet-advice/${currentUser.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ingredients, language: config.language, focus })
+      });
+      const data = await res.json();
+      if (data.success && data.advice) {
+        setDietAdvice(data.advice);
+      } else {
+        setDietAdvice(fallbackAdvice());
+      }
+    } catch (err) {
+      console.error('Failed to generate diet advice:', err);
+      setDietAdvice(fallbackAdvice());
+    } finally {
+      setDietAdviceLoading(false);
     }
-  }, [config.reportGenerationLogic, config.language]);
+  };
+
+  // Generate advice when the user/account first loads or language changes.
+  useEffect(() => {
+    if (!account) return;
+    generateDietAdvice();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account?.user.id, config.language]);
 
   // Persist kitchen changes to the server (except for the demo account).
   useEffect(() => {
@@ -163,28 +186,70 @@ export default function App() {
     }));
   };
 
+  // Handler: Update an existing ingredient container
+  const handleUpdateIngredient = (updated: Ingredient) => {
+    updateKitchen((prev) => {
+      const hasThreshold = updated.hasThreshold !== false;
+      const maxQty = hasThreshold ? updated.maxQty : updated.currentQty;
+      const percentage = hasThreshold && maxQty > 0
+        ? Math.round((updated.currentQty / maxQty) * 100)
+        : 100;
+      const status = deriveStatusFromPercentage(percentage);
+      return {
+        ...prev,
+        ingredients: prev.ingredients.map((item) =>
+          item.id === updated.id
+            ? { ...updated, maxQty, percentage, status, lastUpdated: new Date().toISOString() }
+            : item
+        )
+      };
+    });
+  };
+
+  // Handler: Delete an ingredient container
+  const handleDeleteIngredient = (id: string) => {
+    updateKitchen((prev) => ({
+      ...prev,
+      ingredients: prev.ingredients.filter((i) => i.id !== id)
+    }));
+  };
+
   // Handler: Manual restock logging from Dashboard
   const handleManualRefill = (name: string, qty: string) => {
     updateKitchen((prev) => {
       const match = prev.ingredients.find((i) => i.name.toLowerCase() === name.toLowerCase());
+      const parsedQty = parseFloat(qty.replace(/^\+/, '')) || 0;
+      const unitMatch = qty.match(/[a-zA-Z%]+$/);
+      const unit = unitMatch ? unitMatch[0] : (match?.unit || 'g');
+      const now = new Date().toISOString();
+
       const updatedIngredients = match
-        ? prev.ingredients.map((item) =>
-            item.id === match.id
-              ? {
-                  ...item,
-                  percentage: 100,
-                  currentQty: item.maxQty,
-                  status: 'normal' as const,
-                  lastUpdated: new Date().toISOString()
-                }
-              : item
-          )
+        ? prev.ingredients.map((item) => {
+            if (item.id !== match.id) return item;
+            const hasThreshold = item.hasThreshold !== false;
+            const newQty = hasThreshold
+              ? Math.min(item.maxQty, item.currentQty + parsedQty)
+              : item.currentQty + parsedQty;
+            const newMaxQty = hasThreshold ? item.maxQty : newQty;
+            const percentage = hasThreshold && newMaxQty > 0
+              ? Math.round((newQty / newMaxQty) * 100)
+              : 100;
+            return {
+              ...item,
+              currentQty: newQty,
+              maxQty: newMaxQty,
+              unit,
+              percentage,
+              status: deriveStatusFromPercentage(percentage),
+              lastUpdated: now
+            };
+          })
         : prev.ingredients;
 
       const newRecord = {
         id: `refill-manual-${Date.now()}`,
         ingredientName: name,
-        qtyAdded: qty.startsWith('+') ? qty : `+${qty}`,
+        qtyAdded: `+${parsedQty}${unit}`,
         method: 'MANUAL' as const,
         confidence: 100,
         timestamp: 'Just now'
@@ -195,6 +260,102 @@ export default function App() {
         ingredients: updatedIngredients,
         refills: [newRecord, ...prev.refills]
       };
+    });
+  };
+
+  const deriveStatusFromPercentage = (percentage: number): Ingredient['status'] => {
+    if (percentage >= 60) return 'normal';
+    if (percentage >= 30) return 'stable';
+    return 'critical';
+  };
+
+  const handleApplyDetections = (payload: {
+    refills?: DetectedRefill[];
+    ingredients?: DetectedIngredient[];
+  }) => {
+    updateKitchen((prev) => {
+      const now = new Date().toISOString();
+      let ingredients = [...prev.ingredients];
+      const refills = [...prev.refills];
+
+      (payload.refills || []).forEach((detection, index) => {
+        const name = detection.ingredientName.trim();
+        const unit = detection.unit || 'g';
+        const qty = Math.max(0, Number(detection.quantity) || 0);
+        const match = ingredients.find((i) => i.name.toLowerCase() === name.toLowerCase());
+
+        if (match) {
+          const hasThreshold = match.hasThreshold !== false;
+          const newQty = hasThreshold
+            ? Math.min(match.maxQty, match.currentQty + qty)
+            : match.currentQty + qty;
+          const newMaxQty = hasThreshold ? match.maxQty : newQty;
+          const percentage = hasThreshold && newMaxQty > 0
+            ? Math.round((newQty / newMaxQty) * 100)
+            : 100;
+          ingredients = ingredients.map((item) =>
+            item.id === match.id
+              ? {
+                  ...item,
+                  currentQty: newQty,
+                  maxQty: newMaxQty,
+                  percentage,
+                  status: deriveStatusFromPercentage(percentage),
+                  lastUpdated: now
+                }
+              : item
+          );
+        } else {
+          const hasThreshold = detection.hasThreshold === true;
+          const id = `ing-ai-${Date.now()}-${index}`;
+          ingredients.unshift({
+            id,
+            name,
+            category: detection.category || 'Pantry',
+            currentQty: qty,
+            maxQty: hasThreshold ? (detection.maxQty ?? qty) : qty,
+            unit,
+            hasThreshold,
+            percentage: 100,
+            status: 'normal',
+            freshness: 100,
+            spoilageRisk: 'Low',
+            lastUpdated: now,
+            isCustom: true
+          });
+        }
+
+        refills.unshift({
+          id: `refill-ai-${Date.now()}-${index}`,
+          ingredientName: name,
+          qtyAdded: `+${qty}${unit}`,
+          method: 'OPTICAL AI',
+          confidence: typeof detection.confidence === 'number' ? detection.confidence : 90,
+          timestamp: 'Just now'
+        });
+      });
+
+      (payload.ingredients || []).forEach((detection, index) => {
+        const name = detection.name.trim();
+        if (ingredients.some((i) => i.name.toLowerCase() === name.toLowerCase())) return;
+
+        ingredients.unshift({
+          id: `ing-detected-${Date.now()}-${index}`,
+          name,
+          category: detection.category || 'Pantry',
+          currentQty: Math.max(0, Number(detection.currentQty) || 0),
+          maxQty: Math.max(0, Number(detection.maxQty) || Number(detection.currentQty) || 0),
+          unit: detection.unit || 'g',
+          percentage: 100,
+          status: 'normal',
+          freshness: typeof detection.freshness === 'number' ? detection.freshness : 100,
+          spoilageRisk: detection.spoilageRisk || 'Low',
+          lastUpdated: now,
+          isCustom: true
+        });
+      });
+
+      return { ...prev, ingredients, refills };
     });
   };
 
@@ -233,7 +394,7 @@ export default function App() {
   };
 
   const handleRefreshAdvice = () => {
-    setDietAdvice(DIETARY_ADVICE_POOL[Math.floor(Math.random() * DIETARY_ADVICE_POOL.length)]);
+    generateDietAdvice();
   };
 
   const handleUpdateConfig = (newConfig: Partial<UserConfig>) => {
@@ -276,11 +437,20 @@ export default function App() {
             onNavigateToTab={(tab) => setCurrentTab(tab)}
             darkMode={config.darkMode}
             isDemo={currentUser?.id === DEMO_USER_ID}
+            adviceLoading={dietAdviceLoading}
+            onUpdateIngredient={handleUpdateIngredient}
+            onDeleteIngredient={handleDeleteIngredient}
           />
         );
       case 'analyze':
         return (
-          <AnalyzeScreen user={currentUser} isDemo={currentUser?.id === DEMO_USER_ID} />
+          <AnalyzeScreen
+            user={currentUser}
+            isDemo={currentUser?.id === DEMO_USER_ID}
+            ingredients={ingredients}
+            refills={refills}
+            onApplyDetections={handleApplyDetections}
+          />
         );
       case 'inventory':
         return (
@@ -312,6 +482,7 @@ export default function App() {
             onRefreshAdvice={handleRefreshAdvice}
             onNavigateToTab={setCurrentTab}
             darkMode={config.darkMode}
+            adviceLoading={dietAdviceLoading}
           />
         );
     }
