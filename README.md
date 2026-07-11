@@ -1,6 +1,6 @@
 # Clear-Pantry
 
-> **Demo Version** — This is an early prototype and demonstration of the Clear-Pantry concept. AI-dependent dashboard widgets are still simulated for the demo account, but photo capture, storage, gallery, and image analysis are now backed by real device and server-side functionality.
+> **Demo Version** — This is an early prototype and demonstration of the Clear-Pantry concept. Photo capture, storage, gallery, AI image analysis, AI conversation, AI refill detection, and AI dietary advice are backed by real device and server-side functionality. Dashboard critical reports are intentionally emptied for non-demo accounts (no statistic-based alarms); the demo account still shows curated example cards.
 
 **Clear-Pantry** is a modern, mobile-first kitchen ingredient organizer powered by visual AI. It helps you track what’s in your pantry, monitor depletion levels, and get personalized dietary advice — all through a clean, minimalist interface.
 
@@ -19,8 +19,10 @@
   - Single-photo delete in detail view; multi-select delete in grid view.
 - **AI-Powered Image Analysis** — Send any pantry photo to a real vision model (Baidu Qianfan `kimi-k2.6` via the OpenAI-compatible API) and receive a short ingredient summary in the user’s selected language.
 - **Extended AI Conversation** — Open a foldable chat drawer on any gallery photo to ask follow-up questions, save the conversation, and continue later.
-- **AI Refill Detection** — Tap **Detect Refill** to let the AI scan the photo for newly added ingredients or refills. Review and edit the detected items in a confirmation window, then approve to record them in the pantry refills chart.
-- **Smart Home Dashboard** — View key stats, ingredient consumption summaries, and AI-generated healthy diet advice. *(Demo account only; placeholder state for other accounts.)*
+- **AI Refill Detection** — Tap **Detect Refill** to let the AI scan the photo for newly added ingredients or refills. The confirmation modal lets you choose whether a detection should add to an existing container or create a new one, and optionally enforce a capacity threshold.
+- **Structured AI Responses** — AI conversation and refill detection use a JSON schema (`v1.0.0`) for reliable `reply`, `detectedRefills`, `detectedIngredients`, and `actions` fields.
+- **Smart Home Dashboard** — View key stats, ingredient consumption summaries, and an AI-generated dietary advice card with a **Regenerate** button. The advice is generated from the current pantry using Baidu Qianfan.
+- **Container Management** — Edit ingredient containers directly from the Home screen: swipe to delete, open a full-screen editor to rename, adjust quantity/capacity/unit, toggle capacity thresholds, set category, freshness, and spoilage risk.
 - **Consumption Dashboard / Pantry** — Browse detailed inventory levels, review refill history, and log manual restocks.
 - **Visual Data Insights** — Track ingredient quantities over time with an interactive line chart based on live pantry data.
 - **Multi-Language Support** — Switch between English, Chinese, and Spanish in Settings.
@@ -48,7 +50,8 @@
 .
 ├── data/
 │   ├── users.json              # Mock account database (credentials + per-account kitchen data)
-│   └── images/<username>/      # Photos captured or uploaded by each account
+│   ├── images/<username>/      # Photos captured or uploaded by each account
+│   └── conversations/<username>/ # Saved AI conversations for each account
 ├── .env                        # API key for AI image analysis (gitignored)
 ├── .env.example                # Template for required environment variables
 ├── index.html                  # App entry point
@@ -104,7 +107,7 @@ API_KEY=your_qianfan_api_key
 APP_ID=your_qianfan_app_id   # optional
 ```
 
-AI image analysis is skipped gracefully when no `API_KEY` is provided.
+AI image analysis and AI dietary advice fall back gracefully when no `API_KEY` is provided.
 
 ### Development
 
@@ -169,7 +172,7 @@ Accounts are stored in `data/users.json`. Each user object includes:
 - **Non-demo accounts** persist ingredient, refill, and config changes to `data/users.json`.
 - **Demo account** (`demo`) always reloads its canonical sample data on login; session changes are not persisted.
 - The **welcome screen** appears only once, immediately after a new account is created.
-- **Account deletion** also removes the corresponding `data/images/<username>/` folder.
+- **Account deletion** also removes the corresponding `data/images/<username>/` and `data/conversations/<username>/` folders.
 
 ---
 
@@ -178,7 +181,7 @@ Accounts are stored in `data/users.json`. Each user object includes:
 | Feature | Demo Account | Other Accounts |
 |---------|--------------|----------------|
 | Home critical reports | Hardcoded mock cards | Real critical items or empty placeholders |
-| Dietary advice | Rotating AI advice + plan modal | Placeholder for future AI |
+| Dietary advice | AI-generated from pantry with regenerate | AI-generated from pantry with regenerate |
 | Consumption trends | Hardcoded bar graph | Empty placeholder or live data |
 | Analyze camera | Live camera preview + capture + AI analysis | Live camera preview + capture + AI analysis |
 | Photo gallery | Full gallery with swipe navigation | Full gallery with swipe navigation |
@@ -199,7 +202,7 @@ The Express server in `server.js` exposes:
 - `POST /api/signup` — create a new account
 - `GET /api/account/:userId` — fetch kitchen data and welcome state
 - `POST /api/account/:userId` — save kitchen data and/or welcome state (ignored for demo)
-- `DELETE /api/account/:userId` — delete an account and its stored images
+- `DELETE /api/account/:userId` — delete an account and its stored images and conversations
 
 ### Images
 
@@ -212,6 +215,7 @@ The Express server in `server.js` exposes:
 
 - `POST /api/analyze-image/:userId` — analyze a stored image with Baidu Qianfan and return a short ingredient summary
 - `POST /api/ai-conversation/:userId` — multi-turn AI assistant that returns structured JSON (`reply`, `detectedRefills`, `detectedIngredients`, etc.)
+- `POST /api/diet-advice/:userId` — generate a short, personalized dietary tip from the current pantry
 
 ### Conversations
 
@@ -225,9 +229,10 @@ The Express server in `server.js` exposes:
 ## Demo Notes
 
 - The Analyze page uses a live `getUserMedia` camera preview. On mobile devices a secure context (HTTPS or localhost) is required.
-- AI object detection, capacity estimation, dietary advice, and critical alerts are simulated for the demo account dashboard, but image analysis and AI conversation on the Analyze page are powered by the configured Baidu Qianfan model when an `API_KEY` is present.
+- Dashboard critical reports and consumption trends are curated for the demo account; non-demo accounts see empty placeholder states for these statistic-based features.
+- AI image analysis, AI conversation, AI refill detection, and AI dietary advice are powered by the configured Baidu Qianfan model when an `API_KEY` is present.
 - Saved AI conversations are stored under `data/conversations/<username>/` and are removed when the account is deleted.
-- Non-demo accounts see placeholder states for AI-dependent dashboard features while retaining full pantry tracking, photo capture, gallery, and image analysis functionality.
+- Non-demo accounts see placeholder states for critical reports and consumption trends, but receive real AI-generated dietary advice plus full pantry tracking, photo capture, gallery, AI conversation, and AI analysis functionality.
 - Account credentials are stored in plain text in `data/users.json` for this local demo. A production app must use password hashing and a real database.
 
 ---
