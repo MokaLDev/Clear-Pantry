@@ -5,6 +5,8 @@ import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import 'dotenv/config';
 import OpenAI from 'openai';
+import bcrypt from 'bcryptjs';
+import { prisma } from './src/lib/prisma.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const USERS_FILE = path.join(__dirname, 'data', 'users.json');
@@ -32,36 +34,124 @@ const openai = process.env.API_KEY
     })
   : null;
 
-async function readUsers() {
-  try {
-    const raw = await fs.readFile(USERS_FILE, 'utf-8');
-    return JSON.parse(raw);
-  } catch {
-    return { users: [] };
-  }
-}
-
-async function writeUsers(data) {
-  await fs.writeFile(USERS_FILE, JSON.stringify(data, null, 2));
-}
-
-async function findUserById(id) {
-  const data = await readUsers();
-  return data.users.find((u) => u.id === id);
-}
-
 function sanitizeUser(user) {
-  // Return user info without the password to the client.
-  const { password, ...rest } = user;
-  return rest;
+  // Return user info without the password hash to the client.
+  return {
+    id: user.id,
+    username: user.username,
+    info: user.info,
+    seenWelcome: user.seenWelcome,
+    isDemo: user.isDemo,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt
+  };
 }
 
-function deepClone(obj) {
-  return JSON.parse(JSON.stringify(obj));
+function serializeKitchen(kitchen) {
+  if (!kitchen) {
+    return { ingredients: [], refills: [], config: { darkMode: false, language: 'en', reportGenerationLogic: '' } };
+  }
+  return {
+    config: {
+      darkMode: kitchen.darkMode,
+      language: kitchen.language,
+      reportGenerationLogic: kitchen.reportGenerationLogic
+    },
+    ingredients: kitchen.ingredients.map((i) => ({
+      id: i.ingredientId,
+      name: i.name,
+      category: i.category,
+      currentQty: i.currentQty,
+      maxQty: i.maxQty,
+      unit: i.unit,
+      percentage: i.percentage,
+      status: i.status,
+      freshness: i.freshness,
+      spoilageRisk: i.spoilageRisk,
+      lastUpdated: i.lastUpdated.toISOString(),
+      isCustom: i.isCustom,
+      hasThreshold: i.hasThreshold
+    })),
+    refills: kitchen.refills.map((r) => ({
+      id: r.id,
+      ingredientName: r.ingredientName,
+      qtyAdded: r.qtyAdded,
+      method: r.method,
+      confidence: r.confidence,
+      timestamp: r.timestamp
+    }))
+  };
+}
+
+async function upsertKitchenForUser(userId, kitchen) {
+  const config = kitchen?.config || {};
+  const ingredients = Array.isArray(kitchen?.ingredients) ? kitchen.ingredients : [];
+  const refills = Array.isArray(kitchen?.refills) ? kitchen.refills : [];
+
+  const existingKitchen = await prisma.kitchen.findUnique({ where: { userId } });
+  if (!existingKitchen) {
+    // Should not happen because signup creates a kitchen, but handle gracefully.
+    await prisma.kitchen.create({
+      data: {
+        userId,
+        darkMode: config.darkMode ?? false,
+        language: config.language ?? 'en',
+        reportGenerationLogic: config.reportGenerationLogic ?? '',
+        ingredients: { createMany: { data: ingredients.map(ingredientCreateArgs) } },
+        refills: { createMany: { data: refills.map(refillCreateArgs) } }
+      }
+    });
+    return;
+  }
+
+  const kitchenId = existingKitchen.id;
+
+  await prisma.$transaction([
+    prisma.ingredient.deleteMany({ where: { kitchenId } }),
+    prisma.refillRecord.deleteMany({ where: { kitchenId } }),
+    prisma.kitchen.update({
+      where: { userId },
+      data: {
+        darkMode: config.darkMode ?? existingKitchen.darkMode,
+        language: config.language ?? existingKitchen.language,
+        reportGenerationLogic: config.reportGenerationLogic ?? existingKitchen.reportGenerationLogic,
+        ingredients: { createMany: { data: ingredients.map(ingredientCreateArgs) } },
+        refills: { createMany: { data: refills.map(refillCreateArgs) } }
+      }
+    })
+  ]);
+}
+
+function ingredientCreateArgs(i) {
+  return {
+    ingredientId: i.id,
+    name: i.name,
+    category: i.category,
+    currentQty: i.currentQty ?? 0,
+    maxQty: i.maxQty ?? i.currentQty ?? 0,
+    unit: i.unit,
+    percentage: i.percentage ?? 100,
+    status: i.status ?? 'normal',
+    freshness: i.freshness ?? 50,
+    spoilageRisk: i.spoilageRisk ?? 'Low',
+    lastUpdated: i.lastUpdated ? new Date(i.lastUpdated) : new Date(),
+    isCustom: i.isCustom ?? false,
+    hasThreshold: i.hasThreshold ?? true
+  };
+}
+
+function refillCreateArgs(r) {
+  return {
+    ingredientName: r.ingredientName,
+    qtyAdded: r.qtyAdded,
+    method: r.method ?? 'MANUAL',
+    confidence: r.confidence ?? 0,
+    timestamp: r.timestamp ?? new Date().toISOString()
+  };
 }
 
 async function resolveUserImagePath(userId, filename) {
-  const user = await findUserById(userId);
+  const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user || !user.username) return null;
   const userDir = path.resolve(path.join(IMAGES_DIR, user.username));
   const filePath = path.resolve(path.join(userDir, path.basename(filename)));
@@ -71,7 +161,7 @@ async function resolveUserImagePath(userId, filename) {
 }
 
 async function resolveUserConversationDir(userId) {
-  const user = await findUserById(userId);
+  const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user || !user.username) return null;
   const userDir = path.resolve(path.join(CONVERSATIONS_DIR, user.username));
   return userDir;
@@ -192,26 +282,34 @@ async function createServer() {
 
   // GET all users (for client-side validation fallback)
   app.get('/api/users', async (_req, res) => {
-    const data = await readUsers();
-    res.json({ users: data.users.map(sanitizeUser) });
+    const users = await prisma.user.findMany();
+    res.json({ users: users.map(sanitizeUser) });
   });
 
   // POST login
   app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
-    const data = await readUsers();
-    const user = data.users.find(
-      (u) => u.username.toLowerCase() === username.toLowerCase() && u.password === password
-    );
-
-    if (user) {
-      res.json({ success: true, user: sanitizeUser(user) });
-    } else {
-      res.status(401).json({ success: false, message: 'Invalid username or password.' });
+    if (!username || !password) {
+      res.status(400).json({ success: false, message: 'Username and password are required.' });
+      return;
     }
+
+    const user = await prisma.user.findUnique({ where: { username: username.toLowerCase() } });
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Invalid username or password.' });
+      return;
+    }
+
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) {
+      res.status(401).json({ success: false, message: 'Invalid username or password.' });
+      return;
+    }
+
+    res.json({ success: true, user: sanitizeUser(user) });
   });
 
-  // POST sign-up - creates account with a copy of the demo kitchen
+  // POST sign-up - creates account with an empty kitchen
   app.post('/api/signup', async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) {
@@ -219,38 +317,42 @@ async function createServer() {
       return;
     }
 
-    const data = await readUsers();
-    if (data.users.some((u) => u.username.toLowerCase() === username.toLowerCase())) {
+    const normalizedUsername = username.toLowerCase();
+    const existing = await prisma.user.findUnique({ where: { username: normalizedUsername } });
+    if (existing) {
       res.status(409).json({ success: false, message: 'Username already exists.' });
       return;
     }
 
-    const newUser = {
-      id: `user-${Date.now()}`,
-      username,
-      password,
-      info: 'Personal kitchen account',
-      seenWelcome: false,
-      kitchen: {
-        ingredients: [],
-        refills: [],
-        config: {
-          darkMode: false,
-          language: 'en',
-          reportGenerationLogic: 'Prioritize high-protein ingredients and list expiration dates in DD/MM/YYYY format...'
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const user = await prisma.user.create({
+      data: {
+        id: `user-${Date.now()}`,
+        username: normalizedUsername,
+        passwordHash,
+        info: 'Personal kitchen account',
+        seenWelcome: false,
+        isDemo: false,
+        kitchen: {
+          create: {
+            darkMode: false,
+            language: 'en',
+            reportGenerationLogic: 'Prioritize high-protein ingredients and list expiration dates in DD/MM/YYYY format...'
+          }
         }
       }
-    };
+    });
 
-    data.users.push(newUser);
-    await writeUsers(data);
-    res.json({ success: true, user: sanitizeUser(newUser) });
+    res.json({ success: true, user: sanitizeUser(user) });
   });
 
   // GET account kitchen + welcome state
   app.get('/api/account/:userId', async (req, res) => {
-    const data = await readUsers();
-    const user = data.users.find((u) => u.id === req.params.userId);
+    const user = await prisma.user.findUnique({
+      where: { id: req.params.userId },
+      include: { kitchen: { include: { ingredients: true, refills: true } } }
+    });
     if (!user) {
       res.status(404).json({ success: false, message: 'User not found.' });
       return;
@@ -258,24 +360,20 @@ async function createServer() {
     res.json({
       success: true,
       seenWelcome: user.seenWelcome,
-      kitchen: deepClone(user.kitchen)
+      kitchen: serializeKitchen(user.kitchen)
     });
   });
 
   // DELETE account
   app.delete('/api/account/:userId', async (req, res) => {
-    const data = await readUsers();
-    const index = data.users.findIndex((u) => u.id === req.params.userId);
-    if (index === -1) {
+    const user = await prisma.user.findUnique({ where: { id: req.params.userId } });
+    if (!user) {
       res.status(404).json({ success: false, message: 'User not found.' });
       return;
     }
 
-    const user = data.users[index];
-
-    // Remove account data
-    data.users.splice(index, 1);
-    await writeUsers(data);
+    // Cascading delete removes Kitchen, Ingredients, Refills, and Conversations.
+    await prisma.user.delete({ where: { id: req.params.userId } });
 
     // Remove the user's captured images
     if (user.username) {
@@ -287,7 +385,7 @@ async function createServer() {
         console.error('Failed to remove user images:', err);
       }
 
-      // Remove the user's saved AI conversations
+      // Remove the user's saved AI conversations (legacy disk folder)
       const userConversationsDir = path.join(CONVERSATIONS_DIR, user.username);
       try {
         await fs.rm(userConversationsDir, { recursive: true, force: true });
@@ -304,25 +402,24 @@ async function createServer() {
   // NOTE: kitchen updates are ignored for the demo account so it always resets.
   app.post('/api/account/:userId', async (req, res) => {
     const { seenWelcome, kitchen } = req.body;
-    const data = await readUsers();
-    const index = data.users.findIndex((u) => u.id === req.params.userId);
-    if (index === -1) {
+    const user = await prisma.user.findUnique({ where: { id: req.params.userId } });
+    if (!user) {
       res.status(404).json({ success: false, message: 'User not found.' });
       return;
     }
 
-    const user = data.users[index];
-
     if (typeof seenWelcome === 'boolean') {
-      user.seenWelcome = seenWelcome;
+      await prisma.user.update({
+        where: { id: req.params.userId },
+        data: { seenWelcome }
+      });
     }
 
     // Demo account: never persist kitchen changes.
-    if (user.id !== DEMO_USER_ID && kitchen) {
-      user.kitchen = deepClone(kitchen);
+    if (!user.isDemo && kitchen) {
+      await upsertKitchenForUser(req.params.userId, kitchen);
     }
 
-    await writeUsers(data);
     res.json({ success: true });
   });
 
@@ -334,7 +431,7 @@ async function createServer() {
       return;
     }
 
-    const user = await findUserById(req.params.userId);
+    const user = await prisma.user.findUnique({ where: { id: req.params.userId } });
     if (!user) {
       res.status(404).json({ success: false, message: 'User not found.' });
       return;
@@ -358,7 +455,7 @@ async function createServer() {
 
   // GET list of captured images for a user
   app.get('/api/images/:userId', async (req, res) => {
-    const user = await findUserById(req.params.userId);
+    const user = await prisma.user.findUnique({ where: { id: req.params.userId } });
     if (!user) {
       res.status(404).json({ success: false, message: 'User not found.' });
       return;
@@ -646,38 +743,32 @@ async function createServer() {
 
   // GET saved conversations for a user
   app.get('/api/conversations/:userId', async (req, res) => {
-    const userDir = await resolveUserConversationDir(req.params.userId);
-    if (!userDir) {
+    const user = await prisma.user.findUnique({ where: { id: req.params.userId } });
+    if (!user) {
       res.status(404).json({ success: false, message: 'User not found.' });
       return;
     }
 
     try {
-      await fs.mkdir(userDir, { recursive: true });
-      const entries = await fs.readdir(userDir);
-      const conversations = await Promise.all(
-        entries
-          .filter((f) => f.endsWith('.json'))
-          .map(async (f) => {
-            const filePath = path.join(userDir, f);
-            try {
-              const raw = await fs.readFile(filePath, 'utf-8');
-              const data = JSON.parse(raw);
-              const excerpt = Array.isArray(data.messages)
-                ? data.messages.slice(-2).map((m) => m.content).join(' ').slice(0, 80)
-                : '';
-              return {
-                id: data.id || f.replace('.json', ''),
-                imageFilename: data.imageFilename || '',
-                excerpt,
-                updatedAt: data.updatedAt || data.createdAt || new Date().toISOString()
-              };
-            } catch {
-              return null;
-            }
-          })
-      );
-      res.json({ success: true, conversations: conversations.filter(Boolean) });
+      const conversations = await prisma.conversation.findMany({
+        where: { userId: req.params.userId },
+        orderBy: { updatedAt: 'desc' }
+      });
+
+      res.json({
+        success: true,
+        conversations: conversations.map((c) => {
+          const excerpt = Array.isArray(c.messages)
+            ? c.messages.slice(-2).map((m) => m.content).join(' ').slice(0, 80)
+            : '';
+          return {
+            id: c.conversationId,
+            imageFilename: c.imageFilename,
+            excerpt,
+            updatedAt: c.updatedAt.toISOString()
+          };
+        })
+      });
     } catch (err) {
       console.error('Failed to list conversations:', err);
       res.status(500).json({ success: false, message: 'Failed to list conversations.' });
@@ -692,25 +783,30 @@ async function createServer() {
       return;
     }
 
-    const userDir = await resolveUserConversationDir(req.params.userId);
-    if (!userDir) {
-      res.status(404).json({ success: false, message: 'User not found.' });
-      return;
-    }
+    const conversation = await prisma.conversation.findUnique({
+      where: {
+        userId_conversationId: {
+          userId: req.params.userId,
+          conversationId
+        }
+      }
+    });
 
-    const filePath = path.join(userDir, `${conversationId}.json`);
-    if (!path.resolve(filePath).startsWith(userDir + path.sep)) {
-      res.status(400).json({ success: false, message: 'Invalid conversation id.' });
-      return;
-    }
-
-    try {
-      const raw = await fs.readFile(filePath, 'utf-8');
-      const data = JSON.parse(raw);
-      res.json({ success: true, conversation: data });
-    } catch {
+    if (!conversation) {
       res.status(404).json({ success: false, message: 'Conversation not found.' });
+      return;
     }
+
+    res.json({
+      success: true,
+      conversation: {
+        id: conversation.conversationId,
+        imageFilename: conversation.imageFilename,
+        createdAt: conversation.createdAt.toISOString(),
+        updatedAt: conversation.updatedAt.toISOString(),
+        messages: conversation.messages
+      }
+    });
   });
 
   // POST create or update a saved conversation
@@ -727,38 +823,43 @@ async function createServer() {
       return;
     }
 
-    const userDir = await resolveUserConversationDir(req.params.userId);
-    if (!userDir) {
+    const user = await prisma.user.findUnique({ where: { id: req.params.userId } });
+    if (!user) {
       res.status(404).json({ success: false, message: 'User not found.' });
       return;
     }
 
-    const filePath = path.join(userDir, `${conversationId}.json`);
-    if (!path.resolve(filePath).startsWith(userDir + path.sep)) {
-      res.status(400).json({ success: false, message: 'Invalid conversation id.' });
-      return;
-    }
-
     try {
-      await fs.mkdir(userDir, { recursive: true });
-      let existing = null;
-      try {
-        existing = JSON.parse(await fs.readFile(filePath, 'utf-8'));
-      } catch {
-        // new conversation
-      }
+      const conversation = await prisma.conversation.upsert({
+        where: {
+          userId_conversationId: {
+            userId: req.params.userId,
+            conversationId
+          }
+        },
+        update: {
+          imageFilename,
+          messages,
+          updatedAt: new Date()
+        },
+        create: {
+          userId: req.params.userId,
+          conversationId,
+          imageFilename,
+          messages
+        }
+      });
 
-      const now = new Date().toISOString();
-      const conversation = {
-        id: conversationId,
-        imageFilename,
-        createdAt: existing?.createdAt || now,
-        updatedAt: now,
-        messages
-      };
-
-      await fs.writeFile(filePath, JSON.stringify(conversation, null, 2));
-      res.json({ success: true, conversation });
+      res.json({
+        success: true,
+        conversation: {
+          id: conversation.conversationId,
+          imageFilename: conversation.imageFilename,
+          createdAt: conversation.createdAt.toISOString(),
+          updatedAt: conversation.updatedAt.toISOString(),
+          messages: conversation.messages
+        }
+      });
     } catch (err) {
       console.error('Failed to save conversation:', err);
       res.status(500).json({ success: false, message: 'Failed to save conversation.' });
@@ -773,23 +874,23 @@ async function createServer() {
       return;
     }
 
-    const userDir = await resolveUserConversationDir(req.params.userId);
-    if (!userDir) {
-      res.status(404).json({ success: false, message: 'User not found.' });
-      return;
-    }
-
-    const filePath = path.join(userDir, `${conversationId}.json`);
-    if (!path.resolve(filePath).startsWith(userDir + path.sep)) {
-      res.status(400).json({ success: false, message: 'Invalid conversation id.' });
-      return;
-    }
-
     try {
-      await fs.unlink(filePath);
+      await prisma.conversation.delete({
+        where: {
+          userId_conversationId: {
+            userId: req.params.userId,
+            conversationId
+          }
+        }
+      });
       res.json({ success: true });
-    } catch {
-      res.status(404).json({ success: false, message: 'Conversation not found.' });
+    } catch (err) {
+      if (err.code === 'P2025') {
+        res.status(404).json({ success: false, message: 'Conversation not found.' });
+      } else {
+        console.error('Failed to delete conversation:', err);
+        res.status(500).json({ success: false, message: 'Failed to delete conversation.' });
+      }
     }
   });
 

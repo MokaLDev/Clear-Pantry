@@ -40,9 +40,11 @@ export interface UserConfig {
 export interface User {
   id: string;
   username: string;
-  password: string;
   info: string;
   seenWelcome: boolean;
+  isDemo?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface KitchenData {

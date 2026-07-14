@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id
+  username     String   @unique
+  passwordHash String
+  info         String   @default("Personal kitchen account")
+  seenWelcome  Boolean  @default(false)
+  isDemo       Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  kitchen       Kitchen?
+  conversations Conversation[]
+}
+
+model Kitchen {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  darkMode              Boolean @default(false)
+  language              String  @default("en")
+  reportGenerationLogic String  @default("Prioritize high-protein ingredients and items with high spoilage risk.")
+
+  ingredients Ingredient[]
+  refills     RefillRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Ingredient {
+  id           String  @id @default(cuid())
+  kitchenId    String
+  kitchen      Kitchen @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+
+  // Mirrors the client-side Ingredient id (e.g. "flour")
+  ingredientId String
+  name         String
+  category     String
+  currentQty   Float
+  maxQty       Float
+  unit         String
+  percentage   Int
+  status       String
+  freshness    Int
+  spoilageRisk String
+  lastUpdated  DateTime @updatedAt
+  isCustom     Boolean @default(false)
+  hasThreshold Boolean @default(true)
+
+  @@unique([kitchenId, ingredientId])
+}
+
+model RefillRecord {
+  id             String  @id @default(cuid())
+  kitchenId      String
+  kitchen        Kitchen @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+
+  ingredientName String
+  qtyAdded       String
+  method         String
+  confidence     Int     @default(0)
+  timestamp      String
+}
+
+model Conversation {
+  id             String   @id @default(cuid())
+  conversationId String
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  imageFilename  String
+  messages       Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([userId, conversationId])
+}
