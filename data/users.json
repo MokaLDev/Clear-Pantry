@@ -325,53 +325,14 @@
       "info": "Personal kitchen account",
       "seenWelcome": true,
       "kitchen": {
-        "ingredients": [
-          {
-            "id": "ing-ai-1783765891995-0",
-            "name": "flower nocap",
-            "category": "烘焙原料",
-            "currentQty": 1000,
-            "maxQty": 5000,
-            "unit": "g",
-            "percentage": 20,
-            "status": "critical",
-            "freshness": 100,
-            "spoilageRisk": "Low",
-            "lastUpdated": "2026-07-11T11:04:15.039Z",
-            "isCustom": true,
-            "hasThreshold": true
-          },
-          {
-            "id": "ing-ai-1783761588782-0",
-            "name": "面粉",
-            "category": "烘焙原料",
-            "currentQty": 2000,
-            "maxQty": 2000,
-            "unit": "g",
-            "percentage": 100,
-            "status": "normal",
-            "freshness": 100,
-            "spoilageRisk": "Low",
-            "lastUpdated": "2026-07-11T10:47:01.307Z",
-            "isCustom": true,
-            "hasThreshold": true
-          }
-        ],
+        "ingredients": [],
         "refills": [
           {
-            "id": "refill-manual-1783766821307",
+            "id": "refill-ai-1783931661721-0",
             "ingredientName": "面粉",
-            "qtyAdded": "+500g",
-            "method": "MANUAL",
-            "confidence": 100,
-            "timestamp": "Just now"
-          },
-          {
-            "id": "refill-manual-1783766785610",
-            "ingredientName": "flower nocap",
             "qtyAdded": "+1000g",
-            "method": "MANUAL",
-            "confidence": 100,
+            "method": "OPTICAL AI",
+            "confidence": 85,
             "timestamp": "Just now"
           },
           {
@@ -381,66 +342,10 @@
             "method": "MANUAL",
             "confidence": 100,
             "timestamp": "Just now"
-          },
-          {
-            "id": "refill-manual-1783766570421",
-            "ingredientName": "Spinach (Organic)",
-            "qtyAdded": "+250g",
-            "method": "MANUAL",
-            "confidence": 100,
-            "timestamp": "Just now"
-          },
-          {
-            "id": "refill-ai-1783766095001-0",
-            "ingredientName": "flour capped",
-            "qtyAdded": "+1000g",
-            "method": "OPTICAL AI",
-            "confidence": 85,
-            "timestamp": "Just now"
-          },
-          {
-            "id": "refill-ai-1783765891995-0",
-            "ingredientName": "flower nocap",
-            "qtyAdded": "+1000g",
-            "method": "OPTICAL AI",
-            "confidence": 75,
-            "timestamp": "Just now"
-          },
-          {
-            "id": "refill-ai-1783765822147-0",
-            "ingredientName": "面粉",
-            "qtyAdded": "+1000g",
-            "method": "OPTICAL AI",
-            "confidence": 85,
-            "timestamp": "Just now"
-          },
-          {
-            "id": "refill-ai-1783762632559-0",
-            "ingredientName": "Flour",
-            "qtyAdded": "+1000g",
-            "method": "OPTICAL AI",
-            "confidence": 75,
-            "timestamp": "Just now"
-          },
-          {
-            "id": "refill-ai-1783762425989-0",
-            "ingredientName": "Flour",
-            "qtyAdded": "+150g",
-            "method": "OPTICAL AI",
-            "confidence": 85,
-            "timestamp": "Just now"
-          },
-          {
-            "id": "refill-ai-1783762146199-0",
-            "ingredientName": "面粉",
-            "qtyAdded": "+1000g",
-            "method": "OPTICAL AI",
-            "confidence": 80,
-            "timestamp": "Just now"
           }
         ],
         "config": {
-          "darkMode": true,
+          "darkMode": false,
           "language": "en",
           "reportGenerationLogic": "Prioritize high-protein ingredients and list expiration dates in DD/MM/YYYY format..."
         }

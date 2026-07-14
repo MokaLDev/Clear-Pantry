@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Ingredient } from '../types';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   AlertTriangle,
   ShieldCheck,
@@ -46,7 +47,6 @@ export default function HomeScreen({
 
   // Container list swipe-to-delete state
   const [swipeOffsets, setSwipeOffsets] = useState<Record<string, number>>({});
-  const [exitingId, setExitingId] = useState<string | null>(null);
   const swipeRef = useRef<{ id: string; startX: number; startOffset: number } | null>(null);
   const pointerMoved = useRef(false);
   const DELETE_WIDTH = 64;
@@ -110,16 +110,12 @@ export default function HomeScreen({
   };
 
   const animateDelete = (id: string) => {
-    setExitingId(id);
-    setTimeout(() => {
-      onDeleteIngredient?.(id);
-      setExitingId(null);
-      setSwipeOffsets((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-    }, 250);
+    onDeleteIngredient?.(id);
+    setSwipeOffsets((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
   };
 
   // Container editor helpers
@@ -384,92 +380,96 @@ export default function HomeScreen({
             {t('home.containers')}
           </h3>
           {ingredients.length > 0 ? (
-            <div className="space-y-3">
-              {ingredients.map((item, idx) => {
-                const offset = swipeOffsets[item.id] || 0;
-                const isExiting = exitingId === item.id;
-                const bgWidth = offset < 0 ? Math.min(-offset, MAX_DRAG) : 0;
-                return (
-                  <div
-                    key={item.id}
-                    className={`relative overflow-hidden rounded transition-all duration-300 ${
-                      isExiting ? 'opacity-0 -translate-x-full' : 'opacity-100'
-                    } ${idx !== 0 ? 'mt-3' : ''}`}
-                  >
-                    {/* Delete background */}
-                    <button
-                      onClick={() => animateDelete(item.id)}
-                      className={`absolute inset-y-0 right-0 flex items-center justify-center text-white ${
-                        darkMode ? 'bg-red-900/80' : 'bg-[#ba1a1a]'
-                      }`}
-                      style={{
-                        width: `${bgWidth}px`,
-                        transition: swipeRef.current?.id === item.id ? 'none' : 'width 200ms ease-out'
-                      }}
-                      aria-label={t('inventory.deleteRefill')}
+            <div className="flex flex-col gap-3">
+              <AnimatePresence mode="popLayout" initial={false}>
+                {ingredients.map((item) => {
+                  const offset = swipeOffsets[item.id] || 0;
+                  const bgWidth = offset < 0 ? Math.min(-offset, MAX_DRAG) : 0;
+                  return (
+                    <motion.div
+                      key={item.id}
+                      layout
+                      initial={false}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: '-100%' }}
+                      transition={{ duration: 0.3, ease: 'easeOut' }}
+                      className="relative overflow-hidden rounded"
                     >
-                      <Trash2 size={18} />
-                    </button>
+                      {/* Delete background */}
+                      <button
+                        onClick={() => animateDelete(item.id)}
+                        className={`absolute inset-y-0 right-0 flex items-center justify-center text-white ${
+                          darkMode ? 'bg-red-900/80' : 'bg-[#ba1a1a]'
+                        }`}
+                        style={{
+                          width: `${bgWidth}px`,
+                          transition: swipeRef.current?.id === item.id ? 'none' : 'width 200ms ease-out'
+                        }}
+                        aria-label={t('inventory.deleteRefill')}
+                      >
+                        <Trash2 size={18} />
+                      </button>
 
-                    {/* Swipeable card */}
-                    <div
-                      className={`relative flex items-center justify-between gap-4 p-3 rounded cursor-pointer pointer-events-auto touch-pan-y ${
-                        darkMode ? 'bg-neutral-800' : 'bg-[#f3f0ef]'
-                      }`}
-                      style={{
-                        transform: `translateX(${offset}px)`,
-                        transition: swipeRef.current?.id === item.id ? 'none' : 'transform 200ms ease-out'
-                      }}
-                      onPointerDown={(e) => {
-                        e.currentTarget.setPointerCapture(e.pointerId);
-                        pointerMoved.current = false;
-                        handlePointerStart(item.id, e.clientX);
-                      }}
-                      onPointerMove={(e) => {
-                        if (swipeRef.current && swipeRef.current.id === item.id) {
-                          const delta = Math.abs(e.clientX - swipeRef.current.startX);
-                          if (delta > 5) pointerMoved.current = true;
-                        }
-                        handlePointerMove(item.id, e.clientX);
-                      }}
-                      onPointerUp={(e) => handlePointerEnd(item.id, e.clientX)}
-                      onPointerLeave={(e) => handlePointerEnd(item.id, e.clientX)}
-                      onClick={() => {
-                        if (pointerMoved.current) {
+                      {/* Swipeable card */}
+                      <div
+                        className={`relative flex items-center justify-between gap-4 p-3 rounded cursor-pointer pointer-events-auto touch-pan-y ${
+                          darkMode ? 'bg-neutral-800' : 'bg-[#f3f0ef]'
+                        }`}
+                        style={{
+                          transform: `translateX(${offset}px)`,
+                          transition: swipeRef.current?.id === item.id ? 'none' : 'transform 200ms ease-out'
+                        }}
+                        onPointerDown={(e) => {
+                          e.currentTarget.setPointerCapture(e.pointerId);
                           pointerMoved.current = false;
-                          return;
-                        }
-                        if ((swipeOffsets[item.id] || 0) === 0) openEditor(item);
-                      }}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className={`w-8 h-8 rounded flex items-center justify-center text-lg shrink-0 ${darkMode ? 'bg-neutral-700' : 'bg-[#e5e2e1]'}`}>
-                          {item.category === 'Fridge' ? '🧊' : '🥫'}
+                          handlePointerStart(item.id, e.clientX);
+                        }}
+                        onPointerMove={(e) => {
+                          if (swipeRef.current && swipeRef.current.id === item.id) {
+                            const delta = Math.abs(e.clientX - swipeRef.current.startX);
+                            if (delta > 5) pointerMoved.current = true;
+                          }
+                          handlePointerMove(item.id, e.clientX);
+                        }}
+                        onPointerUp={(e) => handlePointerEnd(item.id, e.clientX)}
+                        onPointerLeave={(e) => handlePointerEnd(item.id, e.clientX)}
+                        onClick={() => {
+                          if (pointerMoved.current) {
+                            pointerMoved.current = false;
+                            return;
+                          }
+                          if ((swipeOffsets[item.id] || 0) === 0) openEditor(item);
+                        }}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-8 h-8 rounded flex items-center justify-center text-lg shrink-0 ${darkMode ? 'bg-neutral-700' : 'bg-[#e5e2e1]'}`}>
+                            {item.category === 'Fridge' ? '🧊' : '🥫'}
+                          </div>
+                          <div className="min-w-0">
+                            <h5 className="text-xs font-bold truncate">{item.name}</h5>
+                            <span className={`text-[10px] ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
+                              {t('home.itemRemaining', { qty: item.currentQty, unit: item.unit })}
+                              {item.maxQty > item.currentQty ? ` / ${item.maxQty}${item.unit}` : ''}
+                            </span>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <h5 className="text-xs font-bold truncate">{item.name}</h5>
-                          <span className={`text-[10px] ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
-                            {t('home.itemRemaining', { qty: item.currentQty, unit: item.unit })}
-                            {item.maxQty > item.currentQty ? ` / ${item.maxQty}${item.unit}` : ''}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className={`w-24 h-1.5 rounded-full overflow-hidden ${darkMode ? 'bg-neutral-700' : 'bg-[#e5e2e1]'}`}>
+                            <div
+                              className={`h-full ${item.status === 'critical' ? 'bg-red-500' : darkMode ? 'bg-[#00f0ff]' : 'bg-[#006970]'}`}
+                              style={{ width: `${Math.min(100, item.percentage)}%` }}
+                            />
+                          </div>
+                          <span className="text-[11px] font-mono min-w-[28px] text-right">
+                            {item.percentage}%
                           </span>
+                          <Edit3 size={12} className={`${darkMode ? 'text-neutral-500' : 'text-[#9ca3af]'}`} />
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <div className={`w-24 h-1.5 rounded-full overflow-hidden ${darkMode ? 'bg-neutral-700' : 'bg-[#e5e2e1]'}`}>
-                          <div
-                            className={`h-full ${item.status === 'critical' ? 'bg-red-500' : darkMode ? 'bg-[#00f0ff]' : 'bg-[#006970]'}`}
-                            style={{ width: `${Math.min(100, item.percentage)}%` }}
-                          />
-                        </div>
-                        <span className="text-[11px] font-mono min-w-[28px] text-right">
-                          {item.percentage}%
-                        </span>
-                        <Edit3 size={12} className={`${darkMode ? 'text-neutral-500' : 'text-[#9ca3af]'}`} />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
             </div>
           ) : (
             <div className={`flex items-center justify-center h-20 rounded ${darkMode ? 'bg-neutral-950/50' : 'bg-[#fcf9f8]'}`}>
