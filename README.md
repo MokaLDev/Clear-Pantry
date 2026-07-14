@@ -49,11 +49,17 @@
 ```
 .
 ├── data/
-│   ├── users.json              # Mock account database (credentials + per-account kitchen data)
+│   ├── users.json              # Legacy mock account database (kept as a backup; no longer used)
 │   ├── images/<username>/      # Photos captured or uploaded by each account
-│   └── conversations/<username>/ # Saved AI conversations for each account
-├── .env                        # API key for AI image analysis (gitignored)
+│   └── conversations/<username>/ # Legacy saved AI conversations folder (no longer used)
+├── prisma/
+│   ├── schema.prisma           # Prisma schema for PostgreSQL
+│   └── seed.js                 # Seed script for default demo/chef accounts
+├── scripts/
+│   └── migrate-json-to-db.js   # One-off import from data/users.json
+├── .env                        # API key and database URL (gitignored)
 ├── .env.example                # Template for required environment variables
+├── docker-compose.yml          # Docker Compose setup for local PostgreSQL
 ├── index.html                  # App entry point
 ├── package.json                # Dependencies and scripts
 ├── server.js                   # Express dev/production server + auth, account & image APIs
@@ -61,6 +67,8 @@
 ├── tsconfig.json               # TypeScript configuration
 ├── metadata.json               # App metadata for Google AI Studio
 ├── src/
+│   ├── lib/
+│   │   └── prisma.js           # Prisma client singleton
 │   ├── App.tsx                 # Main app shell, navigation, auth gating, and state management
 │   ├── main.tsx                # React root render
 │   ├── index.css               # Global styles
@@ -85,6 +93,7 @@
 
 - Node.js (v18 or later recommended)
 - npm
+- PostgreSQL 14+ (self-hosted; see Database Setup below)
 
 ### Installation
 
@@ -109,7 +118,50 @@ APP_ID=your_qianfan_app_id   # optional
 
 AI image analysis and AI dietary advice fall back gracefully when no `API_KEY` is provided.
 
+### Database Setup
+
+This app uses a self-hosted PostgreSQL database. Choose one of the following options:
+
+**Option A: Docker (recommended if Docker is installed)**
+
+```bash
+npm run db:start
+```
+
+This starts a Postgres container named `clearpantry-postgres` on port `5432` with a persistent volume.
+
+**Option B: Postgres.app (macOS without Docker)**
+
+1. Download and install [Postgres.app](https://postgresapp.com).
+2. Open Postgres.app and create a new database named `clearpantry`.
+3. Create a user matching the `DATABASE_URL` in `.env` (default: `clearpantry` / `clearpantry`).
+
+**Option C: Existing Postgres server**
+
+Update `DATABASE_URL` in `.env` to point to your server:
+
+```bash
+DATABASE_URL=postgresql://user:password@localhost:5432/clearpantry?schema=public
+```
+
+**Initialize the database**
+
+Once Postgres is running, apply the schema and seed the default accounts:
+
+```bash
+npx prisma migrate dev --name init
+npm run db:seed
+```
+
+To import any existing users from the old `data/users.json` file:
+
+```bash
+npm run db:migrate-json
+```
+
 ### Development
+
+Make sure Postgres is running and the database is initialized, then start the app:
 
 ```bash
 npm run dev
@@ -130,7 +182,7 @@ npm run build
 NODE_ENV=production node server.js
 ```
 
-The production server serves the built frontend from `dist/` and uses `data/users.json` as the account database.
+The production server serves the built frontend from `dist/` and connects to the PostgreSQL database defined in `DATABASE_URL`.
 
 ### Lint
 
@@ -172,7 +224,7 @@ Accounts are stored in `data/users.json`. Each user object includes:
 - **Non-demo accounts** persist ingredient, refill, and config changes to `data/users.json`.
 - **Demo account** (`demo`) always reloads its canonical sample data on login; session changes are not persisted.
 - The **welcome screen** appears only once, immediately after a new account is created.
-- **Account deletion** also removes the corresponding `data/images/<username>/` and `data/conversations/<username>/` folders.
+- **Account deletion** removes the user and all related database rows (kitchen, ingredients, refills, conversations), plus the `data/images/<username>/` folder.
 
 ---
 
@@ -202,7 +254,7 @@ The Express server in `server.js` exposes:
 - `POST /api/signup` — create a new account
 - `GET /api/account/:userId` — fetch kitchen data and welcome state
 - `POST /api/account/:userId` — save kitchen data and/or welcome state (ignored for demo)
-- `DELETE /api/account/:userId` — delete an account and its stored images and conversations
+- `DELETE /api/account/:userId` — delete an account, its database rows (cascading), and its stored images
 
 ### Images
 
