@@ -162,8 +162,13 @@ export default function HomeScreen({
   };
 
   const startCreate = () => {
+    const id =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `ing-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
     const newIngredient: Ingredient = {
-      id: crypto.randomUUID(),
+      id,
       name: '',
       category: 'Pantry',
       currentQty: 0,
