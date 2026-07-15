@@ -6,6 +6,7 @@ import { createServer as createViteServer } from 'vite';
 import 'dotenv/config';
 import OpenAI from 'openai';
 import bcrypt from 'bcryptjs';
+import COS from 'cos-nodejs-sdk-v5';
 import { prisma } from './src/lib/prisma.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -33,6 +34,105 @@ const openai = process.env.API_KEY
       defaultHeaders
     })
   : null;
+
+// Tencent Cloud COS configuration (optional; falls back to local disk if not set)
+const cosClient = process.env.COS_SECRET_ID && process.env.COS_SECRET_KEY
+  ? new COS({
+      SecretId: process.env.COS_SECRET_ID,
+      SecretKey: process.env.COS_SECRET_KEY
+    })
+  : null;
+const COS_BUCKET = process.env.COS_BUCKET || '';
+const COS_REGION = process.env.COS_REGION || '';
+const COS_BASE_URL = process.env.COS_BASE_URL || '';
+
+function cosEnabled() {
+  return !!(cosClient && COS_BUCKET && COS_REGION);
+}
+
+function cosKey(username, filename) {
+  return `images/${username}/${path.basename(filename)}`;
+}
+
+async function cosUrl(key) {
+  // If a public CDN / custom domain is configured, use it directly.
+  if (COS_BASE_URL) {
+    return `${COS_BASE_URL.replace(/\/$/, '')}/${key}`;
+  }
+  // Otherwise build a public COS URL. This requires the bucket/objects to be public-read.
+  return `https://${COS_BUCKET}.cos.${COS_REGION}.myqcloud.com/${key}`;
+}
+
+function cosCall(method, params) {
+  return new Promise((resolve, reject) => {
+    cosClient[method](params, (err, data) => {
+      if (err) return reject(err);
+      resolve(data);
+    });
+  });
+}
+
+async function listCosImages(username) {
+  const prefix = `images/${username}/`;
+  const data = await cosCall('getBucket', {
+    Bucket: COS_BUCKET,
+    Region: COS_REGION,
+    Prefix: prefix,
+    MaxKeys: 1000
+  });
+  return (data.Contents || [])
+    .map((item) => path.basename(item.Key))
+    .filter((name) => name && (/\.(jpg|jpeg)$/i).test(name));
+}
+
+async function uploadCosImage(username, filename, buffer) {
+  const key = cosKey(username, filename);
+  await cosCall('putObject', {
+    Bucket: COS_BUCKET,
+    Region: COS_REGION,
+    Key: key,
+    Body: buffer,
+    ContentType: 'image/jpeg'
+  });
+  return { filename, url: await cosUrl(key) };
+}
+
+async function getCosImageBuffer(username, filename) {
+  const key = cosKey(username, filename);
+  const data = await cosCall('getObject', {
+    Bucket: COS_BUCKET,
+    Region: COS_REGION,
+    Key: key
+  });
+  return data.Body;
+}
+
+async function deleteCosImage(username, filename) {
+  const key = cosKey(username, filename);
+  await cosCall('deleteObject', {
+    Bucket: COS_BUCKET,
+    Region: COS_REGION,
+    Key: key
+  });
+}
+
+async function deleteAllCosImages(username) {
+  const prefix = `images/${username}/`;
+  const data = await cosCall('getBucket', {
+    Bucket: COS_BUCKET,
+    Region: COS_REGION,
+    Prefix: prefix,
+    MaxKeys: 1000
+  });
+  const objects = (data.Contents || []).map((item) => ({ Key: item.Key }));
+  if (objects.length) {
+    await cosCall('deleteMultipleObject', {
+      Bucket: COS_BUCKET,
+      Region: COS_REGION,
+      Objects: objects
+    });
+  }
+}
 
 function sanitizeUser(user) {
   // Return user info without the password hash to the client.
@@ -169,6 +269,21 @@ async function resolveUserImagePath(userId, filename) {
   // Security: ensure the resolved path stays inside the user's own folder.
   if (!filePath.startsWith(userDir + path.sep)) return null;
   return filePath;
+}
+
+async function getImageBuffer(userId, filename) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user || !user.username) return null;
+  if (cosEnabled()) {
+    return getCosImageBuffer(user.username, filename);
+  }
+  const filePath = await resolveUserImagePath(userId, filename);
+  if (!filePath) return null;
+  try {
+    return await fs.readFile(filePath);
+  } catch {
+    return null;
+  }
 }
 
 async function resolveUserConversationDir(userId) {
@@ -388,10 +503,15 @@ async function createServer() {
 
     // Remove the user's captured images
     if (user.username) {
-      const userImagesDir = path.join(IMAGES_DIR, user.username);
       try {
-        await fs.rm(userImagesDir, { recursive: true, force: true });
-        console.log(`Removed user images directory: ${userImagesDir}`);
+        if (cosEnabled()) {
+          await deleteAllCosImages(user.username);
+          console.log(`Removed COS images for user: ${user.username}`);
+        } else {
+          const userImagesDir = path.join(IMAGES_DIR, user.username);
+          await fs.rm(userImagesDir, { recursive: true, force: true });
+          console.log(`Removed user images directory: ${userImagesDir}`);
+        }
       } catch (err) {
         console.error('Failed to remove user images:', err);
       }
@@ -440,7 +560,7 @@ async function createServer() {
     res.json({ success: true });
   });
 
-  // POST capture image from camera and save under data/images/:username
+  // POST capture image from camera and save under data/images/:username (or COS)
   app.post('/api/capture/:userId', async (req, res) => {
     const { image } = req.body;
     if (!image || typeof image !== 'string' || !image.startsWith('data:image/')) {
@@ -454,20 +574,25 @@ async function createServer() {
       return;
     }
 
-    const userDir = path.join(IMAGES_DIR, user.username);
-    await fs.mkdir(userDir, { recursive: true });
-
     const base64 = image.replace(/^data:image\/\w+;base64,/, '');
     const buffer = Buffer.from(base64, 'base64');
     const filename = `${Date.now()}.jpg`;
-    const filePath = path.join(userDir, filename);
-    await fs.writeFile(filePath, buffer);
 
-    res.json({
-      success: true,
-      filename,
-      path: `data/images/${user.username}/${filename}`
-    });
+    try {
+      if (cosEnabled()) {
+        const { url } = await uploadCosImage(user.username, filename, buffer);
+        res.json({ success: true, filename, path: cosKey(user.username, filename), url });
+      } else {
+        const userDir = path.join(IMAGES_DIR, user.username);
+        await fs.mkdir(userDir, { recursive: true });
+        const filePath = path.join(userDir, filename);
+        await fs.writeFile(filePath, buffer);
+        res.json({ success: true, filename, path: `data/images/${user.username}/${filename}` });
+      }
+    } catch (err) {
+      console.error('Failed to save capture:', err);
+      res.status(500).json({ success: false, message: 'Failed to save image.' });
+    }
   });
 
   // GET list of captured images for a user
@@ -478,14 +603,19 @@ async function createServer() {
       return;
     }
 
-    const userDir = path.join(IMAGES_DIR, user.username);
     let images = [];
     try {
-      const entries = await fs.readdir(userDir);
-      images = entries
-        .filter((f) => f.toLowerCase().endsWith('.jpg') || f.toLowerCase().endsWith('.jpeg'))
-        .sort((a, b) => b.localeCompare(a));
-    } catch {
+      if (cosEnabled()) {
+        images = await listCosImages(user.username);
+      } else {
+        const userDir = path.join(IMAGES_DIR, user.username);
+        const entries = await fs.readdir(userDir);
+        images = entries
+          .filter((f) => f.toLowerCase().endsWith('.jpg') || f.toLowerCase().endsWith('.jpeg'))
+          .sort((a, b) => b.localeCompare(a));
+      }
+    } catch (err) {
+      console.error('Failed to list images:', err);
       images = [];
     }
 
@@ -493,32 +623,64 @@ async function createServer() {
   });
 
   // GET a specific user image (security-checked)
+  // With COS + a public CDN base URL this redirects to COS directly.
+  // Otherwise the server proxies the object (works for private buckets too).
   app.get('/api/images/:userId/:filename', async (req, res) => {
-    const filePath = await resolveUserImagePath(req.params.userId, req.params.filename);
-    if (!filePath) {
+    const user = await prisma.user.findUnique({ where: { id: req.params.userId } });
+    if (!user || !user.username) {
       res.status(404).json({ success: false, message: 'Image not found.' });
       return;
     }
 
     try {
+      if (cosEnabled()) {
+        if (COS_BASE_URL) {
+          const key = cosKey(user.username, req.params.filename);
+          const url = await cosUrl(key);
+          return res.redirect(302, url);
+        }
+        const buffer = await getCosImageBuffer(user.username, req.params.filename);
+        if (!buffer) {
+          res.status(404).json({ success: false, message: 'Image not found.' });
+          return;
+        }
+        res.setHeader('Content-Type', 'image/jpeg');
+        return res.send(buffer);
+      }
+
+      const filePath = await resolveUserImagePath(req.params.userId, req.params.filename);
+      if (!filePath) {
+        res.status(404).json({ success: false, message: 'Image not found.' });
+        return;
+      }
       const buffer = await fs.readFile(filePath);
       res.setHeader('Content-Type', 'image/jpeg');
       res.send(buffer);
     } catch (err) {
+      console.error('Failed to serve image:', err);
       res.status(404).json({ success: false, message: 'Image not found.' });
     }
   });
 
   // DELETE a specific user image
   app.delete('/api/images/:userId/:filename', async (req, res) => {
-    const filePath = await resolveUserImagePath(req.params.userId, req.params.filename);
-    if (!filePath) {
+    const user = await prisma.user.findUnique({ where: { id: req.params.userId } });
+    if (!user || !user.username) {
       res.status(404).json({ success: false, message: 'Image not found.' });
       return;
     }
 
     try {
-      await fs.unlink(filePath);
+      if (cosEnabled()) {
+        await deleteCosImage(user.username, req.params.filename);
+      } else {
+        const filePath = await resolveUserImagePath(req.params.userId, req.params.filename);
+        if (!filePath) {
+          res.status(404).json({ success: false, message: 'Image not found.' });
+          return;
+        }
+        await fs.unlink(filePath);
+      }
       res.json({ success: true });
     } catch (err) {
       console.error('Failed to delete image:', err);
@@ -534,8 +696,8 @@ async function createServer() {
       return;
     }
 
-    const filePath = await resolveUserImagePath(req.params.userId, filename);
-    if (!filePath) {
+    const buffer = await getImageBuffer(req.params.userId, filename);
+    if (!buffer) {
       res.status(404).json({ success: false, message: 'Image not found.' });
       return;
     }
@@ -546,7 +708,6 @@ async function createServer() {
     }
 
     try {
-      const buffer = await fs.readFile(filePath);
       const base64 = buffer.toString('base64');
       const dataUrl = `data:image/jpeg;base64,${base64}`;
 
@@ -592,23 +753,14 @@ async function createServer() {
       return;
     }
 
-    const filePath = await resolveUserImagePath(req.params.userId, filename);
-    if (!filePath) {
+    const buffer = await getImageBuffer(req.params.userId, filename);
+    if (!buffer) {
       res.status(404).json({ success: false, message: 'Image not found.' });
       return;
     }
 
     if (!openai) {
       res.status(503).json({ success: false, message: 'AI service is not configured.' });
-      return;
-    }
-
-    let buffer;
-    try {
-      buffer = await fs.readFile(filePath);
-    } catch (err) {
-      console.error('Failed to read image for AI analysis:', err);
-      res.status(500).json({ success: false, message: 'Failed to read image for analysis.' });
       return;
     }
 
