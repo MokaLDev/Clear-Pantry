@@ -67,7 +67,9 @@ model RefillRecord {
   kitchenId      String
   kitchen        Kitchen @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
 
+  ingredientId   String?
   ingredientName String
+  notes          String  @default("")
   qtyAdded       String
   method         String
   confidence     Int     @default(0)

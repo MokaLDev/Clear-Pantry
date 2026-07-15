@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Ingredient } from '../types';
+import { Ingredient, RefillRecord } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   AlertTriangle,
@@ -46,6 +46,11 @@ function hexAlpha(hex: string, alpha: string) {
   return hex + alpha;
 }
 
+interface ContainerRefillPoint extends RefillRecord {
+  qty: number;
+  qtyLeft: number;
+}
+
 interface HomeScreenProps {
   ingredients: Ingredient[];
   dietAdvice: string;
@@ -57,6 +62,7 @@ interface HomeScreenProps {
   onUpdateIngredient?: (ingredient: Ingredient) => void;
   onDeleteIngredient?: (id: string) => void;
   onAddIngredient?: (ingredient: Ingredient) => void;
+  refills?: RefillRecord[];
 }
 
 export default function HomeScreen({
@@ -69,7 +75,8 @@ export default function HomeScreen({
   adviceLoading = false,
   onUpdateIngredient,
   onDeleteIngredient,
-  onAddIngredient
+  onAddIngredient,
+  refills = []
 }: HomeScreenProps) {
   const [dismissed, setDismissed] = useState(false);
   const [showPlanModal, setShowPlanModal] = useState(false);
@@ -88,6 +95,7 @@ export default function HomeScreen({
   const [editingIngredient, setEditingIngredient] = useState<Ingredient | null>(null);
   const [editForm, setEditForm] = useState<Partial<Ingredient>>({});
   const [hasThreshold, setHasThreshold] = useState(false);
+  const [hoveredRefill, setHoveredRefill] = useState<ContainerRefillPoint | null>(null);
 
   const criticalItems: Ingredient[] = [];
   const eggsItem = ingredients.find((i) => i.id === 'organic-eggs') || { currentQty: 6, maxQty: 12, percentage: 50 };
@@ -223,6 +231,30 @@ export default function HomeScreen({
 
   const updateField = <K extends keyof Ingredient>(field: K, value: Ingredient[K]) => {
     setEditForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const getContainerRefillPoints = (ingredient: Ingredient): ContainerRefillPoint[] => {
+    const matches = [...refills]
+      .reverse()
+      .filter(
+        (r) =>
+          (r.ingredientId && r.ingredientId === ingredient.id) ||
+          r.ingredientName.toLowerCase() === ingredient.name.toLowerCase()
+      );
+
+    const parsed = matches.map((r) => {
+      const qty = parseFloat(r.qtyAdded.replace(/^\+/, '')) || 0;
+      return { ...r, qty };
+    });
+
+    const totalAdded = parsed.reduce((sum, r) => sum + r.qty, 0);
+    const startQty = Math.max(0, ingredient.currentQty - totalAdded);
+    let running = startQty;
+
+    return parsed.map((r) => {
+      running += r.qty;
+      return { ...r, qtyLeft: running };
+    });
   };
 
   return (
@@ -692,6 +724,108 @@ export default function HomeScreen({
               <Trash2 size={18} />
             </button>
           </div>
+
+          {/* Refill history graph (existing containers only) */}
+          {editingIngredient && ingredients.some((i) => i.id === editingIngredient.id) && (() => {
+            const points = getContainerRefillPoints(editingIngredient);
+            if (points.length < 2) return null;
+
+            const width = 500;
+            const height = 150;
+            const padding = 20;
+            const yMax = Math.max(
+              editingIngredient.maxQty || 0,
+              editingIngredient.currentQty || 0,
+              ...points.map((p) => p.qtyLeft)
+            ) || 1;
+
+            const getX = (idx: number) => padding + (idx * (width - padding * 2)) / (points.length - 1);
+            const getY = (value: number) => height - padding - ((value / yMax) * (height - padding * 2));
+
+            const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(p.qtyLeft)}`).join(' ');
+
+            return (
+              <div className={`px-6 pt-4 ${darkMode ? 'bg-neutral-900' : 'bg-white'}`}>
+                <label className={`block text-[10px] font-mono uppercase mb-2 ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
+                  {t('inventory.graph.refillHistory')}
+                </label>
+                <div className="relative h-40 w-full">
+                  <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
+                    {/* Grid lines */}
+                    {[0, 0.33, 0.66, 1].map((ratio, idx) => {
+                      const y = padding + ratio * (height - padding * 2);
+                      return (
+                        <line
+                          key={idx}
+                          x1={padding}
+                          y1={y}
+                          x2={width - padding}
+                          y2={y}
+                          stroke={darkMode ? '#262626' : '#f0edec'}
+                          strokeWidth="1"
+                        />
+                      );
+                    })}
+                    {/* Line */}
+                    <path
+                      d={pathD}
+                      fill="none"
+                      stroke={editingIngredient.color || CONTAINER_COLORS[0]}
+                      strokeWidth="2"
+                    />
+                    {/* Points */}
+                    {points.map((point, idx) => {
+                      const x = getX(idx);
+                      const y = getY(point.qtyLeft);
+                      const isActive = hoveredRefill?.id === point.id;
+                      return (
+                        <g key={point.id}>
+                          <circle
+                            cx={x}
+                            cy={y}
+                            r={isActive ? 5 : 3}
+                            fill={darkMode ? '#121212' : '#ffffff'}
+                            stroke={editingIngredient.color || CONTAINER_COLORS[0]}
+                            strokeWidth="2"
+                            className="cursor-pointer transition-all"
+                            onMouseEnter={() => setHoveredRefill(point)}
+                            onMouseLeave={() => setHoveredRefill(null)}
+                            onClick={() => setHoveredRefill(isActive ? null : point)}
+                          />
+                        </g>
+                      );
+                    })}
+                  </svg>
+
+                  {/* Tooltip */}
+                  {hoveredRefill && (
+                    <div
+                      className={`absolute z-10 text-[10px] font-mono p-2 rounded border shadow-sm max-w-[180px] pointer-events-none ${
+                        darkMode
+                          ? 'bg-neutral-950 border-neutral-800 text-white'
+                          : 'bg-white border-[#e5e2e1] text-[#1c1b1b]'
+                      }`}
+                      style={{
+                        left: '50%',
+                        top: '0.5rem',
+                        transform: 'translateX(-50%)'
+                      }}
+                    >
+                      <div className="font-bold">{hoveredRefill.qtyAdded}</div>
+                      <div className={`${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
+                        {t('inventory.graph.qtyLeft')}: {hoveredRefill.qtyLeft}{editingIngredient.unit}
+                      </div>
+                      {hoveredRefill.notes && (
+                        <div className={`mt-1 italic ${darkMode ? 'text-neutral-500' : 'text-[#9ca3af]'}`}>
+                          “{hoveredRefill.notes}”
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Editor form */}
           <div className="flex-1 overflow-y-auto p-6 space-y-5">

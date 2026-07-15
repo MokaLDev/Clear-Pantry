@@ -6,7 +6,7 @@ import { useI18n } from '../i18n';
 interface InventoryScreenProps {
   ingredients: Ingredient[];
   refills: RefillRecord[];
-  onManualRefill: (name: string, qty: string) => void;
+  onManualRefill: (ingredientId: string, qty: string, notes?: string) => void;
   onDeleteRefill: (id: string) => void;
   darkMode: boolean;
   isDemo?: boolean;
@@ -14,9 +14,10 @@ interface InventoryScreenProps {
 
 export default function InventoryScreen({ ingredients, refills, onManualRefill, onDeleteRefill, darkMode, isDemo = false }: InventoryScreenProps) {
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
-  const [manualIngredient, setManualIngredient] = useState('');
+  const [manualIngredientId, setManualIngredientId] = useState('');
   const [manualAmount, setManualAmount] = useState('');
   const [manualUnit, setManualUnit] = useState('g');
+  const [manualNotes, setManualNotes] = useState('');
   const [showManualForm, setShowManualForm] = useState(false);
   const [swipeOffsets, setSwipeOffsets] = useState<Record<string, number>>({});
   const swipeRef = React.useRef<{ id: string; startX: number; startOffset: number } | null>(null);
@@ -68,7 +69,7 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
         return;
       }
       if (e.key === 'Enter') {
-        if (manualIngredient && manualAmount && Number(manualAmount) > 0) {
+        if (manualIngredientId && manualAmount && Number(manualAmount) > 0) {
           handleAddManualRefill();
         }
         return;
@@ -86,10 +87,10 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showManualForm, manualIngredient, manualAmount, manualUnit]);
+  }, [showManualForm, manualIngredientId, manualAmount, manualUnit, manualNotes]);
 
-  // Spoilage risk items (High risk or critical status)
   const spoilageItems = ingredients.filter(i => i.spoilageRisk === 'High');
+  const selectedIngredient = ingredients.find(i => i.id === manualIngredientId);
 
   const days = [
     t('common.days.mon'),
@@ -129,16 +130,17 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
     points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(p)}`).join(' ');
 
   const closeManualForm = () => {
-    setManualIngredient('');
+    setManualIngredientId('');
     setManualAmount('');
     setManualUnit('g');
+    setManualNotes('');
     setShowManualForm(false);
   };
 
   const handleAddManualRefill = () => {
-    if (!manualIngredient || !manualAmount) return;
+    if (!manualIngredientId || !manualAmount) return;
     const qty = `+${manualAmount}${manualUnit}`;
-    onManualRefill(manualIngredient, qty);
+    onManualRefill(manualIngredientId, qty, manualNotes.trim());
     closeManualForm();
   };
 
@@ -426,11 +428,18 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
               ))}
             </div>
 
-            <button 
-              onClick={() => onManualRefill('Spinach (Organic)', '+250g')}
+            <button
+              onClick={() => {
+                if (ingredients.length > 0) {
+                  setManualIngredientId(ingredients[0].id);
+                  setManualAmount('250');
+                  setManualUnit('g');
+                  setShowManualForm(true);
+                }
+              }}
               className={`w-full mt-5 py-2.5 border text-[10px] font-mono font-bold tracking-wider rounded uppercase transition-colors ${
-                darkMode 
-                  ? 'bg-neutral-800 hover:bg-neutral-750 border-neutral-700 text-neutral-200' 
+                darkMode
+                  ? 'bg-neutral-800 hover:bg-neutral-750 border-neutral-700 text-neutral-200'
                   : 'bg-[#fcf9f8] hover:bg-[#f0edec] border-[#e5e2e1] text-[#3b494b]'
               }`}
             >
@@ -487,13 +496,37 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
                 </div>
 
                 <div className="p-4 space-y-3">
-                  {/* Ingredient input */}
-                  <input
-                    type="text"
-                    placeholder={t('inventory.manualForm.ingredientPlaceholder')}
-                    value={manualIngredient}
-                    onChange={(e) => setManualIngredient(e.target.value)}
-                    className={`w-full border text-xs p-2.5 rounded focus:outline-none transition-colors ${
+                  {/* Container selector */}
+                  <div className="relative">
+                    <select
+                      value={manualIngredientId}
+                      onChange={(e) => setManualIngredientId(e.target.value)}
+                      className={`w-full appearance-none border text-xs p-2.5 rounded focus:outline-none transition-colors ${
+                        darkMode
+                          ? 'bg-neutral-950 border-neutral-800 focus:border-[#00f0ff] text-white'
+                          : 'bg-[#fcf9f8] border-[#e5e2e1] focus:border-[#006970] text-[#1c1b1b]'
+                      }`}
+                    >
+                      <option value="">{t('inventory.manualForm.selectContainer')}</option>
+                      {ingredients.map((ing) => (
+                        <option key={ing.id} value={ing.id}>{ing.name}</option>
+                      ))}
+                    </select>
+                    <ChevronDown
+                      size={12}
+                      className={`absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none ${
+                        darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'
+                      }`}
+                    />
+                  </div>
+
+                  {/* Notes input */}
+                  <textarea
+                    placeholder={t('inventory.manualForm.notesPlaceholder')}
+                    value={manualNotes}
+                    onChange={(e) => setManualNotes(e.target.value)}
+                    rows={2}
+                    className={`w-full border text-xs p-2.5 rounded resize-none focus:outline-none transition-colors ${
                       darkMode
                         ? 'bg-neutral-950 border-neutral-800 focus:border-[#00f0ff] text-white'
                         : 'bg-[#fcf9f8] border-[#e5e2e1] focus:border-[#006970] text-[#1c1b1b]'
@@ -555,7 +588,7 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
                   {/* Commit */}
                   <button
                     onClick={handleAddManualRefill}
-                    disabled={!manualIngredient || !manualAmount || Number(manualAmount) <= 0}
+                    disabled={!manualIngredientId || !manualAmount || Number(manualAmount) <= 0}
                     className={`w-full py-2 text-[10px] font-mono tracking-wider uppercase rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                       darkMode ? 'bg-[#00f0ff] text-black hover:bg-[#00dbe9]' : 'bg-[#1c1b1b] text-white hover:bg-black'
                     }`}
@@ -577,6 +610,7 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
                   <th className="py-2.5 font-normal">{t('inventory.table.ingredient')}</th>
                   <th className="py-2.5 font-normal">{t('inventory.table.qtyAdded')}</th>
                   <th className="py-2.5 font-normal">{t('inventory.table.method')}</th>
+                  <th className="py-2.5 font-normal">{t('inventory.table.notes')}</th>
                   <th className="py-2.5 font-normal text-right">{t('inventory.table.confidence')}</th>
                 </tr>
               </thead>
@@ -589,7 +623,7 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
                   const trashScale = 1 + Math.min(1, bgWidth / MAX_DRAG) * 0.4;
                   return (
                     <tr key={refill.id}>
-                      <td colSpan={4} className="p-0">
+                      <td colSpan={5} className="p-0">
                         <div
                           className={`relative overflow-hidden transition-all duration-300 ease-out origin-top
                             ${isExiting ? '-translate-x-full scale-y-0 opacity-0' : 'translate-x-0 scale-y-100 opacity-100'}
@@ -613,7 +647,7 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
 
                           {/* Swipeable row content */}
                           <div
-                            className={`relative w-full grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-4 py-3 select-none touch-pan-y transition-colors ${
+                            className={`relative w-full grid grid-cols-[minmax(0,1fr)_auto_auto_minmax(0,1fr)_auto] items-center gap-4 py-3 select-none touch-pan-y transition-colors ${
                               darkMode ? 'bg-neutral-900 hover:bg-neutral-850/40' : 'bg-white hover:bg-[#fcf9f8]/40'
                             }`}
                             style={{
@@ -643,6 +677,9 @@ export default function InventoryScreen({ ingredients, refills, onManualRefill, 
                               }`}>
                                 {methodLabel(refill.method)}
                               </span>
+                            </span>
+                            <span className={`truncate ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`} title={refill.notes || ''}>
+                              {refill.notes || '—'}
                             </span>
                             <span className={`text-right font-mono ${darkMode ? 'text-neutral-400' : 'text-[#3b494b]'}`}>{refill.confidence}%</span>
                           </div>

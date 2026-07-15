@@ -76,7 +76,9 @@ function serializeKitchen(kitchen) {
     })),
     refills: kitchen.refills.map((r) => ({
       id: r.id,
+      ingredientId: r.ingredientId,
       ingredientName: r.ingredientName,
+      notes: r.notes,
       qtyAdded: r.qtyAdded,
       method: r.method,
       confidence: r.confidence,
@@ -146,7 +148,9 @@ function ingredientCreateArgs(i) {
 
 function refillCreateArgs(r) {
   return {
+    ingredientId: r.ingredientId || null,
     ingredientName: r.ingredientName,
+    notes: r.notes ?? '',
     qtyAdded: r.qtyAdded,
     method: r.method ?? 'MANUAL',
     confidence: r.confidence ?? 0,

@@ -18,7 +18,9 @@ export interface Ingredient {
 
 export interface RefillRecord {
   id: string;
+  ingredientId?: string; // container this refill belongs to
   ingredientName: string;
+  notes?: string;
   qtyAdded: string; // e.g. "+40g", "+500ml", "+250g"
   method: 'OPTICAL AI' | 'MANUAL';
   confidence: number; // e.g. 99, 10, 94

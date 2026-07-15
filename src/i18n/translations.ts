@@ -279,7 +279,9 @@ export const translations = {
       manualForm: {
         title: 'Manual Stock Restock Log',
         close: 'Close',
+        selectContainer: 'Select container',
         ingredientPlaceholder: 'Ingredient (e.g. Flour)',
+        notesPlaceholder: 'Notes (optional)',
         unit: 'UNIT',
         commit: 'Commit Log Entry',
         del: '⌫'
@@ -288,7 +290,12 @@ export const translations = {
         ingredient: 'Ingredient',
         qtyAdded: 'Qty Added',
         method: 'Method',
-        confidence: 'Confidence'
+        confidence: 'Confidence',
+        notes: 'Notes'
+      },
+      graph: {
+        refillHistory: 'Refill History',
+        qtyLeft: 'Qty Left'
       },
       deleteRefill: 'Delete refill',
       consumptionInsight: 'Consumption Insight',
@@ -641,7 +648,9 @@ export const translations = {
       manualForm: {
         title: '手动库存补货记录',
         close: '关闭',
+        selectContainer: '选择容器',
         ingredientPlaceholder: '食材（例如：面粉）',
+        notesPlaceholder: '备注（可选）',
         unit: '单位',
         commit: '提交记录',
         del: '删除'
@@ -650,7 +659,12 @@ export const translations = {
         ingredient: '食材',
         qtyAdded: '添加量',
         method: '方式',
-        confidence: '置信度'
+        confidence: '置信度',
+        notes: '备注'
+      },
+      graph: {
+        refillHistory: '补货历史',
+        qtyLeft: '剩余量'
       },
       deleteRefill: '删除补货记录',
       consumptionInsight: '消耗洞察',
@@ -1003,7 +1017,9 @@ export const translations = {
       manualForm: {
         title: 'Registro Manual de Reabastecimiento',
         close: 'Cerrar',
+        selectContainer: 'Seleccionar recipiente',
         ingredientPlaceholder: 'Ingrediente (ej. Harina)',
+        notesPlaceholder: 'Notas (opcional)',
         unit: 'UNIDAD',
         commit: 'Confirmar Registro',
         del: 'BORRAR'
@@ -1012,7 +1028,12 @@ export const translations = {
         ingredient: 'Ingrediente',
         qtyAdded: 'Cantidad Añadida',
         method: 'Método',
-        confidence: 'Confianza'
+        confidence: 'Confianza',
+        notes: 'Notas'
+      },
+      graph: {
+        refillHistory: 'Historial de Reabastecimiento',
+        qtyLeft: 'Cantidad Restante'
       },
       deleteRefill: 'Eliminar reabastecimiento',
       consumptionInsight: 'Insight de Consumo',

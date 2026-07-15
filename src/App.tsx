@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { UserConfig, User, KitchenData, Ingredient, DetectedRefill, DetectedIngredient } from './types';
+import { UserConfig, User, KitchenData, Ingredient, RefillRecord, DetectedRefill, DetectedIngredient } from './types';
 import { INITIAL_INGREDIENTS, INITIAL_REFILLS, DIETARY_ADVICE_POOL } from './data/defaultIngredients';
 import WelcomeScreen from './components/WelcomeScreen';
 import LoginScreen from './components/LoginScreen';
@@ -224,9 +224,9 @@ export default function App() {
   };
 
   // Handler: Manual restock logging from Dashboard
-  const handleManualRefill = (name: string, qty: string) => {
+  const handleManualRefill = (ingredientId: string, qty: string, notes = '') => {
     updateKitchen((prev) => {
-      const match = prev.ingredients.find((i) => i.name.toLowerCase() === name.toLowerCase());
+      const match = prev.ingredients.find((i) => i.id === ingredientId);
       const parsedQty = parseFloat(qty.replace(/^\+/, '')) || 0;
       const unitMatch = qty.match(/[a-zA-Z%]+$/);
       const unit = unitMatch ? unitMatch[0] : (match?.unit || 'g');
@@ -255,9 +255,11 @@ export default function App() {
           })
         : prev.ingredients;
 
-      const newRecord = {
+      const newRecord: RefillRecord = {
         id: `refill-manual-${Date.now()}`,
-        ingredientName: name,
+        ingredientId: match?.id,
+        ingredientName: match?.name || '',
+        notes,
         qtyAdded: `+${parsedQty}${unit}`,
         method: 'MANUAL' as const,
         confidence: 100,
@@ -293,6 +295,7 @@ export default function App() {
         const qty = Math.max(0, Number(detection.quantity) || 0);
         const match = ingredients.find((i) => i.name.toLowerCase() === name.toLowerCase());
 
+        let matchedIngredientId: string | undefined;
         if (match) {
           const hasThreshold = match.hasThreshold !== false;
           const newQty = hasThreshold
@@ -314,9 +317,11 @@ export default function App() {
                 }
               : item
           );
+          matchedIngredientId = match.id;
         } else {
           const hasThreshold = detection.hasThreshold === true;
           const id = `ing-ai-${Date.now()}-${index}`;
+          matchedIngredientId = id;
           ingredients.unshift({
             id,
             name,
@@ -336,7 +341,9 @@ export default function App() {
 
         refills.unshift({
           id: `refill-ai-${Date.now()}-${index}`,
+          ingredientId: matchedIngredientId,
           ingredientName: name,
+          notes: '',
           qtyAdded: `+${qty}${unit}`,
           method: 'OPTICAL AI',
           confidence: typeof detection.confidence === 'number' ? detection.confidence : 90,
@@ -441,6 +448,7 @@ export default function App() {
         return (
           <HomeScreen
             ingredients={ingredients}
+            refills={refills}
             dietAdvice={dietAdvice}
             onRefreshAdvice={handleRefreshAdvice}
             onNavigateToTab={(tab) => setCurrentTab(tab)}
@@ -488,6 +496,7 @@ export default function App() {
         return (
           <HomeScreen
             ingredients={ingredients}
+            refills={refills}
             dietAdvice={dietAdvice}
             onRefreshAdvice={handleRefreshAdvice}
             onNavigateToTab={setCurrentTab}
