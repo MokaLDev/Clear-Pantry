@@ -102,9 +102,11 @@ async function getCosImageBuffer(username, filename) {
   const data = await cosCall('getObject', {
     Bucket: COS_BUCKET,
     Region: COS_REGION,
-    Key: key
+    Key: key,
+    Output: 'buffer'
   });
-  return data.Body;
+  // The SDK returns a Buffer when Output is 'buffer', but be defensive.
+  return Buffer.isBuffer(data.Body) ? data.Body : Buffer.from(data.Body);
 }
 
 async function deleteCosImage(username, filename) {
