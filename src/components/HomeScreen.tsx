@@ -770,7 +770,7 @@ export default function HomeScreen({
                     <path
                       d={pathD}
                       fill="none"
-                      stroke={editingIngredient.color || CONTAINER_COLORS[0]}
+                      stroke={darkMode ? '#00f0ff' : '#006970'}
                       strokeWidth="2"
                     />
                     {/* Points */}
@@ -785,7 +785,7 @@ export default function HomeScreen({
                             cy={y}
                             r={isActive ? 5 : 3}
                             fill={darkMode ? '#121212' : '#ffffff'}
-                            stroke={editingIngredient.color || CONTAINER_COLORS[0]}
+                            stroke={darkMode ? '#00f0ff' : '#006970'}
                             strokeWidth="2"
                             className="cursor-pointer transition-all"
                             onMouseEnter={() => setHoveredRefill(point)}
