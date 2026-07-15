@@ -105,8 +105,22 @@ async function getCosImageBuffer(username, filename) {
     Key: key,
     Output: 'buffer'
   });
-  // The SDK returns a Buffer when Output is 'buffer', but be defensive.
-  return Buffer.isBuffer(data.Body) ? data.Body : Buffer.from(data.Body);
+
+  // The SDK may return a Buffer, a binary string, or a stream depending on version/options.
+  if (Buffer.isBuffer(data.Body)) {
+    return data.Body;
+  }
+  if (typeof data.Body === 'string') {
+    return Buffer.from(data.Body, 'binary');
+  }
+  if (data.Body && typeof data.Body.on === 'function') {
+    const chunks = [];
+    for await (const chunk of data.Body) {
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks);
+  }
+  return Buffer.from(data.Body);
 }
 
 async function deleteCosImage(username, filename) {
