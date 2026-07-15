@@ -113,11 +113,12 @@ export default function App() {
   const [dietAdviceLoading, setDietAdviceLoading] = useState(false);
 
   const fallbackAdvice = () => {
+    const lang = normalizeLanguage(config.language);
     const pool = [
-      translate(config.language, 'dietAdvice.greens'),
-      translate(config.language, 'dietAdvice.spoilage'),
-      translate(config.language, 'dietAdvice.highProtein'),
-      translate(config.language, 'dietAdvice.lowStock')
+      translate(lang, 'dietAdvice.greens'),
+      translate(lang, 'dietAdvice.spoilage'),
+      translate(lang, 'dietAdvice.highProtein'),
+      translate(lang, 'dietAdvice.lowStock')
     ];
     return pool[Math.floor(Math.random() * pool.length)];
   };
@@ -211,6 +212,14 @@ export default function App() {
     updateKitchen((prev) => ({
       ...prev,
       ingredients: prev.ingredients.filter((i) => i.id !== id)
+    }));
+  };
+
+  // Handler: Add a new ingredient container
+  const handleAddIngredient = (ingredient: Ingredient) => {
+    updateKitchen((prev) => ({
+      ...prev,
+      ingredients: [...prev.ingredients, ingredient]
     }));
   };
 
@@ -440,6 +449,7 @@ export default function App() {
             adviceLoading={dietAdviceLoading}
             onUpdateIngredient={handleUpdateIngredient}
             onDeleteIngredient={handleDeleteIngredient}
+            onAddIngredient={handleAddIngredient}
           />
         );
       case 'analyze':

@@ -70,7 +70,9 @@ function serializeKitchen(kitchen) {
       spoilageRisk: i.spoilageRisk,
       lastUpdated: i.lastUpdated.toISOString(),
       isCustom: i.isCustom,
-      hasThreshold: i.hasThreshold
+      hasThreshold: i.hasThreshold,
+      color: i.color ?? '#dbeafe',
+      icon: i.icon ?? '🥫'
     })),
     refills: kitchen.refills.map((r) => ({
       id: r.id,
@@ -136,7 +138,9 @@ function ingredientCreateArgs(i) {
     spoilageRisk: i.spoilageRisk ?? 'Low',
     lastUpdated: i.lastUpdated ? new Date(i.lastUpdated) : new Date(),
     isCustom: i.isCustom ?? false,
-    hasThreshold: i.hasThreshold ?? true
+    hasThreshold: i.hasThreshold ?? true,
+    color: i.color ?? '#dbeafe',
+    icon: i.icon ?? '🥫'
   };
 }
 

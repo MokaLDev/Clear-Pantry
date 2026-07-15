@@ -12,6 +12,8 @@ export interface Ingredient {
   lastUpdated: string;
   isCustom?: boolean;
   hasThreshold?: boolean; // false = no capacity limit, quantity is tracked but not capped
+  color?: string; // container accent color (hex)
+  icon?: string; // container icon emoji
 }
 
 export interface RefillRecord {

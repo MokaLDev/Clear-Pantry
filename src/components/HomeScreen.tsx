@@ -14,9 +14,37 @@ import {
   ChevronLeft,
   Edit3,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  Plus
 } from 'lucide-react';
 import { useI18n } from '../i18n';
+
+const CONTAINER_COLORS = [
+  '#dbeafe', // soft blue
+  '#dcfce7', // soft green
+  '#fce7f3', // soft pink
+  '#fef3c7', // soft yellow
+  '#f3e8ff', // soft lavender
+  '#ffedd5', // soft orange
+  '#d1fae5', // mint
+  '#fee2e2', // soft red
+  '#e0f2fe', // sky
+  '#f1f5f9'  // soft gray
+];
+
+const CONTAINER_ICONS = [
+  '🥫', '🥚', '🥛', '🍞', '🥦', '🍅', '🍎', '🍖', '🧀', '🍚',
+  '🍯', '🧂', '🧈', '🥜', '🫘', '🍇', '🍊', '🍋', '🍌', '🍉',
+  '🍓', '🫐', '🍈', '🍒', '🍑', '🍍', '🥝', '🥑', '🍆', '🥕',
+  '🌽', '🌶️', '🫑', '🥒', '🥬', '🧄', '🧅', '🍠', '🍳', '🥘',
+  '🍲', '🍜', '🥗', '🍿', '🍩', '🍪', '🎂', '🍰', '🍫', '🍬',
+  '🍭', '🍮', '🍵', '🍶', '🍺', '🍷', '🍴', '🍽️', '🥄', '🔪',
+  '🧊', '🥡'
+];
+
+function hexAlpha(hex: string, alpha: string) {
+  return hex + alpha;
+}
 
 interface HomeScreenProps {
   ingredients: Ingredient[];
@@ -28,6 +56,7 @@ interface HomeScreenProps {
   adviceLoading?: boolean;
   onUpdateIngredient?: (ingredient: Ingredient) => void;
   onDeleteIngredient?: (id: string) => void;
+  onAddIngredient?: (ingredient: Ingredient) => void;
 }
 
 export default function HomeScreen({
@@ -39,7 +68,8 @@ export default function HomeScreen({
   isDemo = false,
   adviceLoading = false,
   onUpdateIngredient,
-  onDeleteIngredient
+  onDeleteIngredient,
+  onAddIngredient
 }: HomeScreenProps) {
   const [dismissed, setDismissed] = useState(false);
   const [showPlanModal, setShowPlanModal] = useState(false);
@@ -131,8 +161,29 @@ export default function HomeScreen({
     setHasThreshold(false);
   };
 
+  const startCreate = () => {
+    const newIngredient: Ingredient = {
+      id: crypto.randomUUID(),
+      name: '',
+      category: 'Pantry',
+      currentQty: 0,
+      maxQty: 100,
+      unit: 'g',
+      percentage: 0,
+      status: 'critical',
+      freshness: 50,
+      spoilageRisk: 'Low',
+      lastUpdated: new Date().toISOString(),
+      isCustom: true,
+      hasThreshold: true,
+      color: CONTAINER_COLORS[0],
+      icon: CONTAINER_ICONS[0]
+    };
+    openEditor(newIngredient);
+  };
+
   const saveIngredient = () => {
-    if (!editingIngredient || !onUpdateIngredient) return;
+    if (!editingIngredient) return;
     const currentQty = Number(editForm.currentQty) ?? editingIngredient.currentQty;
     const maxQty = hasThreshold
       ? Number(editForm.maxQty) ?? editingIngredient.maxQty
@@ -145,7 +196,7 @@ export default function HomeScreen({
     const status: Ingredient['status'] =
       percentage >= 60 ? 'normal' : percentage >= 30 ? 'stable' : 'critical';
 
-    onUpdateIngredient({
+    const payload: Ingredient = {
       ...editingIngredient,
       ...editForm,
       currentQty: safeCurrentQty,
@@ -154,7 +205,14 @@ export default function HomeScreen({
       percentage,
       status,
       lastUpdated: new Date().toISOString()
-    } as Ingredient);
+    };
+
+    const isNew = !ingredients.some((i) => i.id === editingIngredient.id);
+    if (isNew) {
+      onAddIngredient?.(payload);
+    } else {
+      onUpdateIngredient?.(payload);
+    }
     closeEditor();
   };
 
@@ -376,9 +434,22 @@ export default function HomeScreen({
         <div className={`border rounded p-5 shadow-sm transition-colors duration-300 ${
           darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-[#e5e2e1]'
         }`}>
-          <h3 className={`text-xs font-mono tracking-wider mb-4 uppercase ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
-            {t('home.containers')}
-          </h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className={`text-xs font-mono tracking-wider uppercase ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
+              {t('home.containers')}
+            </h3>
+            <button
+              onClick={startCreate}
+              className={`flex items-center gap-1 text-[10px] font-mono font-semibold px-2 py-1 rounded transition-colors pointer-events-auto ${
+                darkMode
+                  ? 'bg-[#00f0ff]/10 text-[#00f0ff] hover:bg-[#00f0ff]/20'
+                  : 'bg-[#006970]/10 text-[#006970] hover:bg-[#006970]/20'
+              }`}
+            >
+              <Plus size={12} />
+              {t('home.addContainer')}
+            </button>
+          </div>
           {ingredients.length > 0 ? (
             <div className="flex flex-col gap-3">
               <AnimatePresence mode="popLayout" initial={false}>
@@ -412,12 +483,13 @@ export default function HomeScreen({
 
                       {/* Swipeable card */}
                       <div
-                        className={`relative flex items-center justify-between gap-4 p-3 rounded cursor-pointer pointer-events-auto touch-pan-y ${
+                        className={`relative flex items-center justify-between gap-4 p-3 rounded cursor-pointer pointer-events-auto touch-pan-y border-l-4 ${
                           darkMode ? 'bg-neutral-800' : 'bg-[#f3f0ef]'
                         }`}
                         style={{
                           transform: `translateX(${offset}px)`,
-                          transition: swipeRef.current?.id === item.id ? 'none' : 'transform 200ms ease-out'
+                          transition: swipeRef.current?.id === item.id ? 'none' : 'transform 200ms ease-out',
+                          borderLeftColor: item.color || CONTAINER_COLORS[0]
                         }}
                         onPointerDown={(e) => {
                           e.currentTarget.setPointerCapture(e.pointerId);
@@ -442,8 +514,11 @@ export default function HomeScreen({
                         }}
                       >
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className={`w-8 h-8 rounded flex items-center justify-center text-lg shrink-0 ${darkMode ? 'bg-neutral-700' : 'bg-[#e5e2e1]'}`}>
-                            {item.category === 'Fridge' ? '🧊' : '🥫'}
+                          <div
+                            className="w-8 h-8 rounded flex items-center justify-center text-lg shrink-0"
+                            style={{ backgroundColor: hexAlpha(item.color || CONTAINER_COLORS[0], darkMode ? '30' : '45') }}
+                          >
+                            {item.icon || CONTAINER_ICONS[0]}
                           </div>
                           <div className="min-w-0">
                             <h5 className="text-xs font-bold truncate">{item.name}</h5>
@@ -714,6 +789,55 @@ export default function HomeScreen({
                   darkMode ? 'bg-neutral-900 border-neutral-700 text-white' : 'bg-white border-[#e5e2e1] text-[#1c1b1b]'
                 }`}
               />
+            </div>
+
+            {/* Color picker */}
+            <div>
+              <label className={`block text-[10px] font-mono uppercase mb-2 ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
+                {t('home.color')}
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {CONTAINER_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => updateField('color', color)}
+                    className={`w-8 h-8 rounded-full border-2 transition-transform pointer-events-auto ${
+                      editForm.color === color ? 'scale-110 border-[#1c1b1b] dark:border-white' : 'border-transparent'
+                    }`}
+                    style={{ backgroundColor: color }}
+                    aria-label={color}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Icon picker */}
+            <div>
+              <label className={`block text-[10px] font-mono uppercase mb-2 ${darkMode ? 'text-neutral-400' : 'text-[#6a7a7b]'}`}>
+                {t('home.icon')}
+              </label>
+              <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-1">
+                {CONTAINER_ICONS.map((icon) => (
+                  <button
+                    key={icon}
+                    type="button"
+                    onClick={() => updateField('icon', icon)}
+                    className={`w-9 h-9 rounded text-lg flex items-center justify-center transition-colors pointer-events-auto ${
+                      editForm.icon === icon
+                        ? darkMode
+                          ? 'bg-neutral-700 border border-[#00f0ff]'
+                          : 'bg-[#e5e2e1] border border-[#006970]'
+                        : darkMode
+                          ? 'bg-neutral-800 hover:bg-neutral-700'
+                          : 'bg-[#f3f0ef] hover:bg-[#e5e2e1]'
+                    }`}
+                    aria-label={icon}
+                  >
+                    {icon}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div>

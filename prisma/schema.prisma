@@ -56,6 +56,8 @@ model Ingredient {
   lastUpdated  DateTime @updatedAt
   isCustom     Boolean @default(false)
   hasThreshold Boolean @default(true)
+  color        String  @default("#dbeafe")
+  icon         String  @default("🥫")
 
   @@unique([kitchenId, ingredientId])
 }
