@@ -92,6 +92,9 @@ async function upsertKitchenForUser(userId, kitchen) {
   const ingredients = Array.isArray(kitchen?.ingredients) ? kitchen.ingredients : [];
   const refills = Array.isArray(kitchen?.refills) ? kitchen.refills : [];
 
+  const ingredientData = ingredients.length ? ingredients.map(ingredientCreateArgs) : null;
+  const refillData = refills.length ? refills.map(refillCreateArgs) : null;
+
   const existingKitchen = await prisma.kitchen.findUnique({ where: { userId } });
   if (!existingKitchen) {
     // Should not happen because signup creates a kitchen, but handle gracefully.
@@ -101,8 +104,8 @@ async function upsertKitchenForUser(userId, kitchen) {
         darkMode: config.darkMode ?? false,
         language: config.language ?? 'en',
         reportGenerationLogic: config.reportGenerationLogic ?? '',
-        ingredients: { createMany: { data: ingredients.map(ingredientCreateArgs) } },
-        refills: { createMany: { data: refills.map(refillCreateArgs) } }
+        ...(ingredientData ? { ingredients: { createMany: { data: ingredientData } } } : {}),
+        ...(refillData ? { refills: { createMany: { data: refillData } } } : {})
       }
     });
     return;
@@ -119,8 +122,8 @@ async function upsertKitchenForUser(userId, kitchen) {
         darkMode: config.darkMode ?? existingKitchen.darkMode,
         language: config.language ?? existingKitchen.language,
         reportGenerationLogic: config.reportGenerationLogic ?? existingKitchen.reportGenerationLogic,
-        ingredients: { createMany: { data: ingredients.map(ingredientCreateArgs) } },
-        refills: { createMany: { data: refills.map(refillCreateArgs) } }
+        ...(ingredientData ? { ingredients: { createMany: { data: ingredientData } } } : {}),
+        ...(refillData ? { refills: { createMany: { data: refillData } } } : {})
       }
     })
   ]);
@@ -425,7 +428,13 @@ async function createServer() {
 
     // Demo account: never persist kitchen changes.
     if (!user.isDemo && kitchen) {
-      await upsertKitchenForUser(req.params.userId, kitchen);
+      try {
+        await upsertKitchenForUser(req.params.userId, kitchen);
+      } catch (err) {
+        console.error('Failed to persist kitchen for user', req.params.userId, err);
+        res.status(500).json({ success: false, message: 'Failed to save kitchen data.' });
+        return;
+      }
     }
 
     res.json({ success: true });
