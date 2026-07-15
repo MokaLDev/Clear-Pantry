@@ -99,14 +99,17 @@ async function uploadCosImage(username, filename, buffer) {
 
 async function getCosImageBuffer(username, filename) {
   const key = cosKey(username, filename);
+  // Omit Output to get a Buffer by default. Passing Output: 'buffer' is a
+  // known SDK pitfall: it treats the string 'buffer' as a filename stream.
   const data = await cosCall('getObject', {
     Bucket: COS_BUCKET,
     Region: COS_REGION,
-    Key: key,
-    Output: 'buffer'
+    Key: key
   });
 
-  // The SDK may return a Buffer, a binary string, or a stream depending on version/options.
+  if (!data || !data.Body) return null;
+
+  // The SDK may return a Buffer, a binary string, or a stream.
   if (Buffer.isBuffer(data.Body)) {
     return data.Body;
   }
